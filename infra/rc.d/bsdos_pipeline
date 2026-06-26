@@ -1,0 +1,103 @@
+#!/bin/sh
+#
+# bsdos_pipeline: unified supervisor for cage → wayland-tunnel → bsdos-core
+#
+# PROVIDE: bsdos_pipeline
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+#
+# /etc/rc.conf variables:
+#   bsdos_pipeline_enable="YES"
+#   bsdos_pipeline_obfs_psk="<base64 key>"      # required
+#   bsdos_pipeline_listen_ip="<dev-vm-ip>"   # obfs listener IP
+#   bsdos_pipeline_listen_port="443"             # obfs listener port
+#   bsdos_pipeline_rundir="/tmp/wayland-run"     # XDG_RUNTIME_DIR
+#   bsdos_pipeline_log_dir="/tmp"               # log directory
+#   bsdos_pipeline_zenoh_peer="tcp/IP:PORT"     # optional: peer to another Zenoh node (e.g. myvm)
+
+. /etc/rc.subr
+
+name="bsdos_pipeline"
+rcvar="bsdos_pipeline_enable"
+
+load_rc_config $name
+
+: ${bsdos_pipeline_enable:="NO"}
+: ${bsdos_pipeline_obfs_psk:=""}
+: ${bsdos_pipeline_listen_ip:="0.0.0.0"}
+: ${bsdos_pipeline_listen_port:="443"}
+: ${bsdos_pipeline_log_dir:="/tmp"}
+: ${bsdos_pipeline_autostream:=""}
+: ${bsdos_pipeline_zenoh_peer:=""}
+
+pidfile="/var/run/${name}.pid"
+command="/usr/sbin/daemon"
+procname="/usr/local/bin/bsdos-core"   # so rc.subr status/check matches the real proc, not /usr/sbin/daemon
+start_cmd="${name}_start"
+stop_cmd="${name}_stop"
+status_cmd="${name}_status"
+
+bsdos_pipeline_start() {
+    echo "Starting ${name}..."
+
+    mkdir -p /var/db/bsdos
+
+    # Build env: only pass BSDOS_AUTOSTREAM if non-empty (otherwise registry restore kicks in)
+    AUTOSTREAM_ENV=""
+    if [ -n "${bsdos_pipeline_autostream}" ]; then
+        AUTOSTREAM_ENV="BSDOS_AUTOSTREAM=${bsdos_pipeline_autostream}"
+    fi
+    PEER_ENV=""
+    if [ -n "${bsdos_pipeline_zenoh_peer}" ]; then
+        PEER_ENV="ZENOH_PEER=${bsdos_pipeline_zenoh_peer}"
+    fi
+
+    daemon -p "${pidfile}" -o "${bsdos_pipeline_log_dir}/bsdos-pipeline.log" \
+        env \
+            ${AUTOSTREAM_ENV} \
+            ${PEER_ENV} \
+            BSDOS_LOG_DIR="${bsdos_pipeline_log_dir}" \
+            BSDOS_OBFS_PSK="${bsdos_pipeline_obfs_psk}" \
+            ZENOH_OBFS=1 \
+            ZENOH_LISTEN_IP="${bsdos_pipeline_listen_ip}" \
+            ZENOH_LISTEN_PORT="${bsdos_pipeline_listen_port}" \
+            RUST_LOG=zenoh=info,zenoh_link_obfs=debug \
+        /usr/local/bin/bsdos-core
+
+    echo "${name} started (pid=$(cat ${pidfile} 2>/dev/null))"
+}
+
+bsdos_pipeline_stop() {
+    echo "Stopping ${name}..."
+    if [ -f "${pidfile}" ]; then
+        kill -TERM "$(cat ${pidfile} 2>/dev/null)" 2>/dev/null || true
+        sleep 2
+        kill -9 "$(cat ${pidfile} 2>/dev/null)" 2>/dev/null || true
+        rm -f "${pidfile}"
+    fi
+    pkill -9 -f "/usr/local/bin/bsdos-core" 2>/dev/null || true
+    pkill -9 -f "/usr/local/bin/wayland-tunnel" 2>/dev/null || true
+    pkill -9 -f "cage -- " 2>/dev/null || true
+    pkill -9 -f "/usr/local/bin/wl-keepalive" 2>/dev/null || true
+    pkill -u freebsd -9 -f "firefox|chromium" 2>/dev/null || true
+    rm -rf /tmp/bsdos/streams/* 2>/dev/null || true
+    echo "${name} stopped"
+}
+
+bsdos_pipeline_status() {
+    if [ -f "${pidfile}" ] && kill -0 "$(cat ${pidfile} 2>/dev/null)" 2>/dev/null; then
+        echo "${name} is running (pid=$(cat ${pidfile}))"
+        pgrep -fl "cage -- " 2>/dev/null | head -1 | sed 's/^/  cage:   /'
+        pgrep -fl "wayland-tunnel" 2>/dev/null | head -1 | sed 's/^/  tunnel: /'
+        pgrep -fl "bsdos-core" 2>/dev/null | head -1 | sed 's/^/  core:   /'
+        pgrep -u freebsd -fl "firefox" 2>/dev/null | head -1 | awk '{print "  app:    " $1 " firefox"}'
+        pgrep -fl "^foot " 2>/dev/null | head -1 | awk '{print "  app:    " $1 " foot"}'
+        ls /tmp/bsdos/streams/ 2>/dev/null | while read d; do
+            echo "  stream: ${d}"
+        done
+    else
+        echo "${name} is not running"
+    fi
+}
+
+run_rc_command "$1"

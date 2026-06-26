@@ -1,0 +1,20 @@
+[package]
+name = "zenoh-peer"
+version = "0.1.0"
+edition = "2021"
+
+# zenoh-peer: in-process Zenoh peer for unit tests.
+# zenoh and tokio are optional so this crate can compile on stable
+# rust for `cargo check` (no nightly freeze required). Tests still
+# require the bridge feature and nightly rust.
+
+[dependencies]
+zenoh = { workspace = true, optional = true }
+tokio = { workspace = true, features = ["full"], optional = true }
+
+[features]
+default = ["with-bridge"]
+with-bridge = ["dep:zenoh", "dep:tokio"]
+
+[lib]
+path = "src/lib.rs"

@@ -1,0 +1,46 @@
+#!/bin/sh
+# PROVIDE: hubd_mcp
+# REQUIRE: NETWORKING
+# KEYWORD: shutdown
+#
+# hubd MCP over Streamable HTTP (POST JSON). Multi-tenant: Bearer token = isolated
+# workspace (tenants/<hash>), no signup. Binds localhost; TLS + public port via Caddy
+# (mcp.example.net). Hardened: explicit start/stop/status keyed off the daemon(8) pidfile
+# so restart cycles cleanly (rc.subr procname-matching against /usr/sbin/daemon is flaky).
+. /etc/rc.subr
+
+name="hubd_mcp"
+rcvar="hubd_mcp_enable"
+load_rc_config "$name"
+
+: ${hubd_mcp_enable:="NO"}
+: ${hubd_mcp_dir:="/var/db/hubd"}        # server base hub (multi-tenant tenants/ live under it)
+: ${hubd_mcp_port:="8787"}
+: ${hubd_mcp_host:="127.0.0.1"}          # localhost only; Caddy fronts TLS + public port
+: ${hubd_mcp_multitenant:="1"}           # 1 = token-is-workspace; 0 = single HUBD_TOKEN
+: ${hubd_mcp_token:=""}                   # required only when multitenant=0
+: ${hubd_mcp_log:="/var/log/hubd_mcp.log"}
+
+pidfile="/var/run/${name}.pid"
+start_cmd="_start"; stop_cmd="_stop"; status_cmd="_status"
+
+_running() { [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile" 2>/dev/null)" 2>/dev/null; }
+_start() {
+    if _running; then echo "$name already running as pid $(cat "$pidfile")."; return 0; fi
+    echo "Starting $name."
+    /usr/sbin/daemon -f -o "$hubd_mcp_log" -p "$pidfile" \
+        /usr/bin/env \
+        HUBD_MULTITENANT="$hubd_mcp_multitenant" \
+        HUBD_TOKEN="$hubd_mcp_token" \
+        HUBD_HTTP_HOST="$hubd_mcp_host" \
+        /bin/sh -c "cd $hubd_mcp_dir; exec /usr/local/bin/node /usr/local/bin/hubd --http $hubd_mcp_port"
+}
+_stop() {
+    if _running; then echo "Stopping $name."; kill "$(cat "$pidfile")" 2>/dev/null; fi
+    rm -f "$pidfile"
+}
+_status() {
+    if _running; then echo "$name is running as pid $(cat "$pidfile")."
+    else echo "$name is not running."; fi
+}
+run_rc_command "$1"

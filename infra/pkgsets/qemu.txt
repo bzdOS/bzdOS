@@ -1,0 +1,25 @@
+# pkgset: qemu — full Squirrel QEMU demo image (2-stream: terminal + browser).
+# Sourced by bsdos-build.sh Stage 2. One package per line; # = comment.
+#
+# Cross-arch note: zenoh / wpewebkit-fdo may not have an aarch64 build in the
+# repo yet — Stage 2 installs each package individually and skips any that the
+# repo can't satisfy (it does not abort the rest).
+
+# Wayland compositor (kiosk) + terminal app
+cage
+foot
+
+# Wayland stack
+wayland-protocols
+
+# Compression (stream frame codec dep)
+liblz4
+
+# Inter-node transport
+zenoh
+
+# regex (pkg dep, used by several of the above)
+pcre2
+
+# phantom-browser deps: wpewebkit-fdo for appBrowser stream
+wpewebkit-fdo

@@ -1,0 +1,89 @@
+#!/bin/sh
+#
+# bsdos-cage-browser: headless Wayland compositor for browser pipeline
+#
+# PROVIDE: bsdos_cage_browser
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+#
+# Add to /etc/rc.conf:
+#   bsdos_cage_browser_enable="YES"
+
+. /etc/rc.subr
+
+name="bsdos_cage_browser"
+rcvar="bsdos_cage_browser_enable"
+
+load_rc_config $name
+
+: ${bsdos_cage_browser_enable:="NO"}
+: ${bsdos_cage_browser_dir:="/tmp/wayland-browser"}
+: ${bsdos_cage_browser_outputs:="1"}
+: ${bsdos_cage_browser_child:="sleep 9999"}
+
+pidfile="/var/run/${name}.pid"
+command="/usr/sbin/daemon"
+procname="/usr/local/bin/cage"   # so rc.subr status/check matches the real proc, not /usr/sbin/daemon
+start_cmd="${name}_start"
+stop_cmd="${name}_stop"
+status_cmd="${name}_status"
+
+bsdos_cage_browser_prestart() {
+    mkdir -p "${bsdos_cage_browser_dir}"
+    chmod 777 "${bsdos_cage_browser_dir}"
+    rm -f "${bsdos_cage_browser_dir}"/wayland-*.sock "${bsdos_cage_browser_dir}"/*.lock 2>/dev/null
+    pkill -f "cage.*sleep 9999" 2>/dev/null || true
+    sleep 1
+}
+
+bsdos_cage_browser_wait_socket() {
+    local sock="${bsdos_cage_browser_dir}/wayland-0"
+    local i=0
+    while [ $i -lt 30 ]; do
+        [ -S "$sock" ] && return 0
+        sleep 0.5
+        i=$((i + 1))
+    done
+    echo "${name}: timeout waiting for ${sock}" >&2
+    return 1
+}
+
+bsdos_cage_browser_start() {
+    bsdos_cage_browser_prestart
+
+    echo "Starting ${name}..."
+
+    daemon -p ${pidfile} -o "${bsdos_cage_browser_dir}/cage.log" \
+        env XDG_RUNTIME_DIR="${bsdos_cage_browser_dir}" \
+            WLR_BACKENDS=headless \
+            WLR_RENDERER=pixman \
+            WLR_HEADLESS_OUTPUTS=${bsdos_cage_browser_outputs} \
+            LIBSEAT_BACKEND=noop \
+        /usr/local/bin/cage -- ${bsdos_cage_browser_child}
+
+    if bsdos_cage_browser_wait_socket; then
+        chmod 777 "${bsdos_cage_browser_dir}/wayland-0" 2>/dev/null
+        echo "${name} started, socket: ${bsdos_cage_browser_dir}/wayland-0"
+    else
+        echo "${name}: WARNING - socket not created"
+    fi
+}
+
+bsdos_cage_browser_stop() {
+    echo "Stopping ${name}..."
+    if [ -f "${pidfile}" ]; then
+        kill -TERM $(cat ${pidfile} 2>/dev/null) 2>/dev/null
+    fi
+    pkill -f "cage.*sleep 9999" 2>/dev/null || true
+    rm -f "${pidfile}"
+}
+
+bsdos_cage_browser_status() {
+    if [ -f "${pidfile}" ] && kill -0 $(cat ${pidfile} 2>/dev/null) 2>/dev/null; then
+        echo "${name} is running (pid $(cat ${pidfile}))"
+    else
+        echo "${name} is not running"
+    fi
+}
+
+run_rc_command "$1"

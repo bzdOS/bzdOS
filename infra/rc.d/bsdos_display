@@ -1,0 +1,129 @@
+#!/bin/sh
+#
+# bsdos_display: Weston Wayland compositor (fbdev backend, PinePhone Porcupine)
+#
+# PROVIDE: bsdos_display
+# REQUIRE: NETWORKING
+# BEFORE: bsdos_core bsdos_core_server
+# KEYWORD: shutdown
+#
+# Add to /etc/rc.conf:
+#   bsdos_display_enable="YES"
+#   bsdos_display_fb="/dev/fb0"
+#   bsdos_display_ini="/usr/local/etc/weston-bsdos.ini"
+#   bsdos_display_backend="fbdev"
+#
+# Notes:
+#   - weston fbdev backend does not use wlroots; WLR_* vars are irrelevant here.
+#   - LIBSEAT_BACKEND=noop bypasses logind (Linux-only); required on FreeBSD.
+#   - LIBGL_ALWAYS_SOFTWARE=1 forces Mesa softpipe/llvmpipe; no DRM node needed.
+#   - Touch input (/dev/input/event0) is auto-discovered by libinput.
+#   - BEFORE: bsdos_core is advisory — bsdos_core does not unconditionally REQUIRE
+#     bsdos_display; this ordering hint only takes effect when both are enabled.
+
+. /etc/rc.subr
+
+name="bsdos_display"
+rcvar="bsdos_display_enable"
+
+load_rc_config "$name"
+
+: ${bsdos_display_enable:="NO"}
+: ${bsdos_display_backend:="fbdev"}
+: ${bsdos_display_fb:="/dev/fb0"}
+: ${bsdos_display_ini:="/usr/local/etc/weston-bsdos.ini"}
+: ${bsdos_display_runtime:="/tmp/wayland-run"}
+: ${bsdos_display_log:="/tmp/bsdos-display.log"}
+
+pidfile="/var/run/${name}.pid"
+start_cmd="${name}_start"
+stop_cmd="${name}_stop"
+status_cmd="${name}_status"
+
+# purpose: check whether weston pid from pidfile is alive
+# input:   none (reads $pidfile)
+# output:  returns 0 if running, 1 otherwise
+# sideEffects: none
+_display_running() {
+    [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile" 2>/dev/null)" 2>/dev/null
+}
+
+# purpose: prepare runtime dir and fb device permissions before weston starts
+# input:   bsdos_display_runtime, bsdos_display_fb
+# output:  none
+# sideEffects: creates runtime dir (mode 755), chmod o+rw on fb device
+_display_prestart() {
+    mkdir -p "${bsdos_display_runtime}"
+    chmod 755 "${bsdos_display_runtime}"
+
+    # Clean stale Wayland socket from previous run
+    rm -f "${bsdos_display_runtime}"/wayland-*.sock \
+          "${bsdos_display_runtime}"/*.lock 2>/dev/null || true
+
+    # Grant world-write on fb0 so weston root process can open it cleanly
+    chmod o+rw "${bsdos_display_fb}" 2>/dev/null || true
+}
+
+# purpose: start weston under daemon(8) with fbdev backend and software GL
+# input:   bsdos_display_* rc.conf variables
+# output:  none
+# sideEffects: spawns weston, writes pidfile, logs to bsdos_display_log
+bsdos_display_start() {
+    if _display_running; then
+        echo "$name already running as pid $(cat "$pidfile")."
+        return 0
+    fi
+
+    _display_prestart
+
+    echo "Starting ${name} (weston --backend=${bsdos_display_backend}-backend.so)..."
+
+    /usr/sbin/daemon -f -p "${pidfile}" -o "${bsdos_display_log}" \
+        /usr/bin/env \
+            XDG_RUNTIME_DIR="${bsdos_display_runtime}" \
+            WAYLAND_DISPLAY=wayland-0 \
+            LIBSEAT_BACKEND=noop \
+            LIBGL_ALWAYS_SOFTWARE=1 \
+            MESA_GALLIUM_DRIVER=softpipe \
+            GALLIUM_DRIVER=softpipe \
+        /usr/local/bin/weston \
+            --backend="${bsdos_display_backend}-backend.so" \
+            --config="${bsdos_display_ini}" \
+            --idle-time=0 \
+            --log="${bsdos_display_log}"
+
+    echo "${name} started. Socket: ${bsdos_display_runtime}/wayland-0"
+    echo "Log: ${bsdos_display_log}"
+}
+
+# purpose: stop weston gracefully via pidfile, then kill any stray weston processes
+# input:   none
+# output:  none
+# sideEffects: sends SIGTERM, removes pidfile
+bsdos_display_stop() {
+    echo "Stopping ${name}..."
+    if _display_running; then
+        kill -TERM "$(cat "$pidfile" 2>/dev/null)" 2>/dev/null || true
+        local i=0
+        while _display_running && [ "$i" -lt 10 ]; do
+            sleep 0.5
+            i=$((i + 1))
+        done
+    fi
+    pkill -f "weston.*${bsdos_display_backend}-backend" 2>/dev/null || true
+    rm -f "${pidfile}"
+}
+
+# purpose: report whether bsdos_display daemon is alive
+# input:   none
+# output:  human-readable status line to stdout
+# sideEffects: none
+bsdos_display_status() {
+    if _display_running; then
+        echo "${name} is running as pid $(cat "$pidfile")."
+    else
+        echo "${name} is not running."
+    fi
+}
+
+run_rc_command "$1"

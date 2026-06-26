@@ -1,0 +1,15 @@
+[package]
+name = "machotool"
+version.workspace = true
+edition.workspace = true
+
+# Standalone Mach-O dependency/architecture inspector for the IPA runtime.
+# NO external crates by design: this must build with just std so it can run on
+# the dev VM (dev-vm) without pulling the network, and so the vchroot populate
+# helper can rely on a single self-contained binary.
+
+[[bin]]
+name = "machotool"
+path = "src/main.rs"
+
+[dependencies]

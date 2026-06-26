@@ -1,0 +1,69 @@
+#!/bin/sh
+#
+# bsdos-firefox: Firefox browser in Wayland mode for browser pipeline
+#
+# PROVIDE: bsdos_firefox
+# REQUIRE: bsdos_tunnel_browser
+# KEYWORD: shutdown
+#
+# Add to /etc/rc.conf:
+#   bsdos_firefox_enable="YES"
+#
+# Optional:
+#   bsdos_firefox_url="about:blank"
+#   bsdos_firefox_user="freebsd"
+
+. /etc/rc.subr
+
+name="bsdos_firefox"
+rcvar="bsdos_firefox_enable"
+
+load_rc_config $name
+
+: ${bsdos_firefox_enable:="NO"}
+: ${bsdos_firefox_dir:="/tmp/wayland-browser"}
+: ${bsdos_firefox_ghost:="/tmp/wayland-browser/wayland-ghost"}
+: ${bsdos_firefox_url:="about:blank"}
+: ${bsdos_firefox_user:="freebsd"}
+: ${bsdos_firefox_log:="/tmp/firefox-browser.log"}
+
+pidfile="/var/run/${name}.pid"
+command="/usr/sbin/daemon"
+procname="/usr/local/bin/firefox"
+start_cmd="${name}_start"
+stop_cmd="${name}_stop"
+
+bsdos_firefox_start() {
+    if [ ! -S "${bsdos_firefox_ghost}" ]; then
+        echo "${name}: ghost socket ${bsdos_firefox_ghost} not found, skipping"
+        return 1
+    fi
+
+    pkill -u ${bsdos_firefox_user} -f firefox 2>/dev/null || true
+    sleep 1
+    touch "${bsdos_firefox_log}" 2>/dev/null
+    chmod 666 "${bsdos_firefox_log}" 2>/dev/null
+
+    echo "Starting ${name} (user=${bsdos_firefox_user})..."
+
+    daemon -p ${pidfile} -r -o "${bsdos_firefox_log}" \
+        su -m ${bsdos_firefox_user} -c \
+            "env XDG_RUNTIME_DIR=${bsdos_firefox_dir} \
+                  WAYLAND_DISPLAY=${bsdos_firefox_ghost} \
+                  MOZ_ENABLE_WAYLAND=1 \
+                  HOME=/home/${bsdos_firefox_user} \
+             /usr/local/bin/firefox --new-instance --no-remote ${bsdos_firefox_url}"
+
+    echo "${name} started"
+}
+
+bsdos_firefox_stop() {
+    echo "Stopping ${name}..."
+    if [ -f "${pidfile}" ]; then
+        kill -TERM $(cat ${pidfile} 2>/dev/null) 2>/dev/null
+    fi
+    pkill -u ${bsdos_firefox_user} -f firefox 2>/dev/null || true
+    rm -f "${pidfile}"
+}
+
+run_rc_command "$1"

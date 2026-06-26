@@ -1,0 +1,6 @@
+#!/bin/sh
+# Launch foot terminal in cage Wayland compositor for appTerminal stream.
+set -e
+export XDG_RUNTIME_DIR=/tmp/wayland-run
+export WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-0}
+exec foot

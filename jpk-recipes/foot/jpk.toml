@@ -1,0 +1,54 @@
+# ── foot .jpk recipe — lightweight terminal emulator ───────────────────────
+# Default app for appTerminal stream. Per SPEC_2stream_squirrel.md §1 table.
+# Per-arch (amd64 + aarch64).
+
+[meta]
+schema_version = "1.0"
+id              = "org.bsdos.foot"
+version         = "0.2.0"
+name            = "foot"
+description     = "Fast lightweight Wayland terminal emulator"
+homepage        = "https://codeberg.org/dnkl/foot"
+license         = "MIT"
+authors         = ["dnkl", "bsdOS port team"]
+maintainer      = "ports@bsdos.org"
+
+[compatibility]
+bsdos_codename_min = "Squirrel"
+bsdos_codename_max = "Porcupine"
+freebsd_min        = "15.1"
+freebsd_max        = "16.0"
+arch               = ["amd64", "aarch64"]
+
+[runtime]
+type          = "jail"
+jail_name     = "appTerminal"
+entrypoint    = "/opt/bsdos/bin/launch"
+needs_wayland = true
+needs_input   = true
+needs_gpu     = false
+needs_audio   = false
+needs_modem   = false
+
+[dependencies]
+cage          = ">=0.1.4"
+fc-terminus   = ">=4.46"   # default font
+
+[permissions]
+capabilities    = ["CAP_READ", "CAP_WRITE", "CAP_EVENT"]
+network         = "unix-only"
+filesystem      = "rw"
+max_open_files  = 256
+max_memory_mb   = 32
+max_cpu_percent = 5
+max_disk_mb     = 16
+network_ingress = false
+network_egress  = false
+
+[update]
+channel     = "stable"
+auto_update = false
+
+[discovery]
+keywords = ["terminal", "shell", "console", "wayland"]
+category = "System"

@@ -1,0 +1,18 @@
+[package]
+name    = "bsdos-core-integration"
+version = "0.1.0"
+edition = "2021"
+
+[dev-dependencies]
+zenoh-peer = { path = "../zenoh-peer" }
+bsdos-core = { path = "../..", features = ["with-bridge"] }
+tokio      = { workspace = true, features = ["full"] }
+zenoh      = { workspace = true }
+
+[[test]]
+name = "zenoh_roundtrip"
+path = "zenoh_roundtrip.rs"
+
+[[test]]
+name = "stream_pipeline"
+path = "stream_pipeline.rs"

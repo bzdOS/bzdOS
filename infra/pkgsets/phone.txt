@@ -1,0 +1,27 @@
+# pkgset: phone — PinePhone Pro (Porcupine v0.3).
+# Sourced by bsdos-build.sh Stage 2. One package per line; # = comment.
+#
+# STUB: currently a copy of the qemu set. Telephony packages (modem manager,
+# dialer, ghost-radio deps) will be added here as Porcupine bring-up proceeds.
+
+# Wayland compositor (kiosk) + terminal app
+cage
+foot
+
+# Wayland stack
+wayland-protocols
+
+# Compression (stream frame codec dep)
+liblz4
+
+# Inter-node transport
+zenoh
+
+# regex (pkg dep)
+pcre2
+
+# phantom-browser deps: wpewebkit-fdo for appBrowser stream
+wpewebkit-fdo
+
+# ── Phone-specific packages (TODO Porcupine v0.3) ───────────────────────────
+# (modem manager / dialer / ghost-radio deps go here)

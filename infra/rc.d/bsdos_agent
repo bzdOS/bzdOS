@@ -1,0 +1,98 @@
+#!/bin/sh
+#
+# bsdos-agent: guest agent on virtio-console /dev/ttyV0.2 (port 2; port 1 = SPICE)
+#
+# PROVIDE: bsdos_agent
+# REQUIRE: FILESYSTEMS mountcritremote
+# KEYWORD: shutdown
+#
+# Add to /etc/rc.conf:
+#   bsdos_agent_enable="YES"
+
+. /etc/rc.subr
+
+name="bsdos_agent"
+rcvar="bsdos_agent_enable"
+
+load_rc_config $name
+
+: ${bsdos_agent_enable:="NO"}
+: ${bsdos_agent_chardev:="/dev/ttyV0.2"}
+: ${bsdos_agent_log:="/var/log/bsdos-agent.log"}
+# Image-first binary path (Chimp/Porcupine: shipped in rootfs, no 9p);
+# falls back to /usr/local/bin symlink, then 9p source build (Squirrel/QEMU).
+: ${bsdos_agent_bin:="/opt/bsdos/bin/bsdos-agent"}
+: ${bsdos_agent_src:="/mnt/bsdos/guest-agent"}
+
+command="/usr/sbin/daemon"
+pidfile="/var/run/${name}.pid"
+start_cmd="${name}_start"
+stop_cmd="${name}_stop"
+status_cmd="${name}_status"
+
+# Resolve the agent binary: prefer the image path, then the /usr/local/bin
+# symlink, then (QEMU only) build from the 9p-mounted source. Sets _bin.
+_ensure_binary() {
+    if [ -x "${bsdos_agent_bin}" ]; then
+        _bin="${bsdos_agent_bin}"
+        return 0
+    fi
+    if [ -x /usr/local/bin/bsdos-agent ]; then
+        _bin="/usr/local/bin/bsdos-agent"
+        return 0
+    fi
+    # QEMU/Squirrel fallback: build from 9p-mounted source (no 9p on hardware).
+    if [ -f "${bsdos_agent_src}/src/main.zig" ] && command -v zig >/dev/null 2>&1; then
+        echo "${name}: binary not found, building from ${bsdos_agent_src}..."
+        mkdir -p /opt/bsdos/bin
+        ( cd /opt/bsdos/bin && zig build-exe "${bsdos_agent_src}/src/main.zig" \
+            -O ReleaseFast --name bsdos-agent ) >>"${bsdos_agent_log}" 2>&1 || return 1
+        chmod 755 /opt/bsdos/bin/bsdos-agent || return 1
+        _bin="/opt/bsdos/bin/bsdos-agent"
+        echo "${name}: built and installed at ${_bin}"
+    else
+        echo "${name}: no binary at ${bsdos_agent_bin} or /usr/local/bin, and no 9p source"
+        return 1
+    fi
+}
+
+bsdos_agent_start() {
+    _ensure_binary || return 1
+
+    # No virtio-console on bare metal (Chimp/Porcupine): skip if chardev absent.
+    if [ ! -e "${bsdos_agent_chardev}" ]; then
+        echo "${name}: chardev ${bsdos_agent_chardev} not present — skipping (bare-metal has no virtio-console)"
+        return 0
+    fi
+
+    pkill -KILL -f "daemon.*bsdos-agent" 2>/dev/null || true
+    pkill -KILL -f bsdos-agent 2>/dev/null || true
+    sleep 0.5
+
+    echo "Starting ${name} (chardev: ${bsdos_agent_chardev})..."
+    daemon -p ${pidfile} -r -R 2 -o "${bsdos_agent_log}" \
+        env BSDOS_CHARDEV_PATH="${bsdos_agent_chardev}" \
+        "${_bin}"
+
+    echo "${name} started"
+}
+
+bsdos_agent_stop() {
+    echo "Stopping ${name}..."
+    if [ -f "${pidfile}" ]; then
+        kill -TERM $(cat ${pidfile} 2>/dev/null) 2>/dev/null || true
+        rm -f "${pidfile}"
+    fi
+    pkill -KILL -f "daemon.*bsdos-agent" 2>/dev/null || true
+    pkill -KILL -f bsdos-agent 2>/dev/null || true
+}
+
+bsdos_agent_status() {
+    if [ -f "${pidfile}" ] && kill -0 $(cat ${pidfile} 2>/dev/null) 2>/dev/null; then
+        echo "${name} is running (pid $(cat ${pidfile}))"
+    else
+        echo "${name} is not running"
+    fi
+}
+
+run_rc_command "$1"

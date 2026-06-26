@@ -1,0 +1,37 @@
+#!/bin/sh
+#
+# bsdos_mount: mount 9p (p9fs) share before pipeline starts
+#
+# PROVIDE: bsdos_mount
+# REQUIRE: FILESYSTEMS
+# BEFORE: DAEMON
+# KEYWORD: nojail shutdown
+
+. /etc/rc.subr
+
+name="bsdos_mount"
+rcvar="bsdos_mount_enable"
+
+load_rc_service $name 2>/dev/null
+load_rc_config $name
+
+: ${bsdos_mount_enable:="YES"}
+
+start_cmd="${name}_start"
+stop_cmd="${name}_stop"
+
+bsdos_mount_start() {
+    echo "Mounting p9fs (9p) share..."
+    if mount -t p9fs -o trans=virtio bsdos /mnt/bsdos 2>/dev/null; then
+        echo "p9fs mounted: /mnt/bsdos"
+    else
+        echo "p9fs mount failed (non-fatal, continuing)"
+    fi
+}
+
+bsdos_mount_stop() {
+    echo "Unmounting p9fs (9p) share..."
+    umount /mnt/bsdos 2>/dev/null || true
+}
+
+run_rc_command "$1"

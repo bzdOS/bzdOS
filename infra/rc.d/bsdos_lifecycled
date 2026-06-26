@@ -1,0 +1,53 @@
+#!/bin/sh
+# PROVIDE: bsdos_lifecycled
+# REQUIRE: NETWORKING FILESYSTEMS mountcritremote
+# KEYWORD: shutdown
+#
+# bsdOS Lifecycle Daemon: manages jail lifecycle (FREEZE/THAW/HIBERNATE/RESTORE/KILL)
+# over Unix socket /var/run/bsdos-lifecycle.sock. Requires root for SIGSTOP/SIGCONT
+# on jail processes. REQUIRE FILESYSTEMS/mountcritremote because it inspects jail
+# state on the (mounted, read-write) filesystem before acting.
+#
+# Hardened daemon supervision: explicit start/stop/status keyed off pidfile.
+# Same pattern as bsdos_core_server.
+. /etc/rc.subr
+
+name="bsdos_lifecycled"
+rcvar="bsdos_lifecycled_enable"
+load_rc_config "$name"
+
+: ${bsdos_lifecycled_enable:="NO"}
+# Image-first binary path (Chimp/Porcupine: /opt/bsdos/bin); /usr/local/bin is
+# the QEMU/Squirrel symlink fallback.
+: ${bsdos_lifecycled_bin:="/opt/bsdos/bin/bsdos-lifecycled"}
+: ${bsdos_lifecycled_log:="/var/log/bsdos-lifecycled.log"}
+
+pidfile="/var/run/${name}.pid"
+start_cmd="_start"; stop_cmd="_stop"; status_cmd="_status"
+
+_resolve_bin() {
+    if [ -x "$bsdos_lifecycled_bin" ]; then echo "$bsdos_lifecycled_bin"
+    elif [ -x /usr/local/bin/bsdos-lifecycled ]; then echo "/usr/local/bin/bsdos-lifecycled"
+    else echo ""; fi
+}
+_running() { [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile" 2>/dev/null)" 2>/dev/null; }
+_start() {
+    if _running; then echo "$name already running as pid $(cat "$pidfile")."; return 0; fi
+    _bin=$(_resolve_bin)
+    if [ -z "$_bin" ]; then
+        echo "$name: bsdos-lifecycled not found at $bsdos_lifecycled_bin or /usr/local/bin"
+        return 1
+    fi
+    echo "Starting $name."
+    /usr/sbin/daemon -f -o "$bsdos_lifecycled_log" -p "$pidfile" \
+        "$_bin"
+}
+_stop() {
+    if _running; then echo "Stopping $name."; kill "$(cat "$pidfile")" 2>/dev/null; fi
+    rm -f "$pidfile"
+}
+_status() {
+    if _running; then echo "$name is running as pid $(cat "$pidfile")."
+    else echo "$name is not running."; fi
+}
+run_rc_command "$1"

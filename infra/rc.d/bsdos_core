@@ -1,0 +1,122 @@
+#!/bin/sh
+#
+# bsdos_core: Wayland stream manager + Zenoh relay
+#
+# PROVIDE: bsdos_core
+# REQUIRE: NETWORKING FILESYSTEMS
+# KEYWORD: shutdown
+#
+# Optional ordering: when bsdos_display is also enabled, rc(8) will start it
+# first because bsdos_display declares BEFORE: bsdos_core in its own script.
+# No unconditional REQUIRE here — QEMU/Chimp headless mode runs without bsdos_display.
+#
+# Add to /etc/rc.conf:
+#   bsdos_core_enable="YES"
+#   bsdos_core_autostream="appTerminal:foot:,appBrowser:chrome:about:blank"
+#   bsdos_core_obfs="YES"
+#   bsdos_core_obfs_psk="your-psk-here"
+#   bsdos_core_listen_ip="0.0.0.0"
+#   bsdos_core_listen_port="7447"
+#   bsdos_core_peer=""
+#   bsdos_core_tls_ca="/etc/bsdos/ca.pem"        # set to enable TLS transport
+#   bsdos_core_tls_cert="/etc/bsdos/server.pem"  # set with tls_key for mTLS
+#   bsdos_core_tls_key="/etc/bsdos/server.key"   # set with tls_cert for mTLS
+
+. /etc/rc.subr
+
+name="bsdos_core"
+rcvar="bsdos_core_enable"
+
+load_rc_config $name
+
+: ${bsdos_core_enable:="NO"}
+: ${bsdos_core_autostream:=""}
+: ${bsdos_core_listen_ip:="0.0.0.0"}
+: ${bsdos_core_listen_port:="7447"}
+: ${bsdos_core_obfs:="NO"}
+: ${bsdos_core_obfs_psk:=""}
+: ${bsdos_core_peer:=""}
+: ${bsdos_core_tls_ca:=""}
+: ${bsdos_core_tls_cert:=""}
+: ${bsdos_core_tls_key:=""}
+: ${bsdos_core_log:="/var/log/bsdos-core.log"}
+# Image-first binary path (Chimp/Porcupine: /opt/bsdos/bin); /usr/local/bin is
+# the QEMU/Squirrel symlink fallback.
+: ${bsdos_core_bin:="/opt/bsdos/bin/bsdos-core"}
+
+pidfile="/var/run/${name}.pid"
+start_cmd="${name}_start"
+stop_cmd="${name}_stop"
+status_cmd="${name}_status"
+
+# Resolve the bsdos-core binary, preferring the image path. Echoes the path.
+_resolve_bin() {
+    if [ -x "${bsdos_core_bin}" ]; then
+        echo "${bsdos_core_bin}"
+    elif [ -x /usr/local/bin/bsdos-core ]; then
+        echo "/usr/local/bin/bsdos-core"
+    else
+        echo ""
+    fi
+}
+
+bsdos_core_start() {
+    _bin=$(_resolve_bin)
+    if [ -z "${_bin}" ]; then
+        echo "${name}: bsdos-core not found at ${bsdos_core_bin} or /usr/local/bin"
+        return 1
+    fi
+    pkill -f bsdos-core 2>/dev/null; sleep 1
+    mkdir -p /tmp/wayland-run /tmp/bsdos/streams
+
+    echo "Starting ${name}..."
+
+    _env="XDG_RUNTIME_DIR=/tmp/wayland-run"
+    _env="${_env} BSDOS_AUTOSTREAM=${bsdos_core_autostream}"
+    _env="${_env} ZENOH_LISTEN_IP=${bsdos_core_listen_ip}"
+    _env="${_env} ZENOH_LISTEN_PORT=${bsdos_core_listen_port}"
+
+    if checkyesno bsdos_core_obfs; then
+        _env="${_env} ZENOH_OBFS=1"
+        _env="${_env} BSDOS_OBFS_PSK=${bsdos_core_obfs_psk}"
+    fi
+
+    if [ -n "${bsdos_core_peer}" ]; then
+        _env="${_env} ZENOH_PEER=${bsdos_core_peer}"
+    fi
+
+    if [ -n "${bsdos_core_tls_ca}" ]; then
+        _env="${_env} ZENOH_TLS_CA=${bsdos_core_tls_ca}"
+    fi
+    if [ -n "${bsdos_core_tls_cert}" ]; then
+        _env="${_env} ZENOH_TLS_CERT=${bsdos_core_tls_cert}"
+    fi
+    if [ -n "${bsdos_core_tls_key}" ]; then
+        _env="${_env} ZENOH_TLS_KEY=${bsdos_core_tls_key}"
+    fi
+
+    /usr/sbin/daemon -f -p "${pidfile}" -o "${bsdos_core_log}" \
+        env ${_env} "${_bin}"
+
+    echo "${name} started"
+}
+
+bsdos_core_stop() {
+    echo "Stopping ${name}..."
+    if [ -f "${pidfile}" ]; then
+        kill -TERM "$(cat ${pidfile} 2>/dev/null)" 2>/dev/null || true
+        sleep 2
+    fi
+    pkill -f bsdos-core 2>/dev/null || true
+    rm -f "${pidfile}"
+}
+
+bsdos_core_status() {
+    if [ -f "${pidfile}" ] && kill -0 "$(cat ${pidfile} 2>/dev/null)" 2>/dev/null; then
+        echo "${name} is running (pid $(cat ${pidfile}))"
+    else
+        echo "${name} is not running"
+    fi
+}
+
+run_rc_command "$1"

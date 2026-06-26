@@ -1,0 +1,21 @@
+# streams.conf — bsdOS stream declarations (TOML)
+# Copy to /etc/bsdos/streams.conf and adjust for your deployment.
+# Loaded at startup; if absent, BSDOS_AUTOSTREAM env var is used instead.
+#
+# Fields:
+#   app_id    — unique stream identifier (used in Zenoh topic paths)
+#   command   — app name recognised by spawn_app(): "foot", "chrome", "cog", "cowork"
+#   autostart — if true, stream is started on daemon startup
+#   args      — optional extra arg passed as the URL / app-dir parameter (default: "")
+
+[[streams]]
+app_id    = "appTerminal"
+command   = "foot"
+autostart = true
+args      = ""
+
+[[streams]]
+app_id    = "appBrowser"
+command   = "cog"
+autostart = true
+args      = "about:blank"

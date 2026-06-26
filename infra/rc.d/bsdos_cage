@@ -1,0 +1,96 @@
+#!/bin/sh
+#
+# bsdos-cage: headless Wayland compositor for foot pipeline
+#
+# PROVIDE: bsdos-cage
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+#
+# Add to /etc/rc.conf:
+#   bsdos_cage_enable="YES"
+
+. /etc/rc.subr
+
+name="bsdos_cage"
+rcvar="bsdos_cage_enable"
+
+load_rc_config $name
+
+: ${bsdos_cage_enable:="NO"}
+: ${bsdos_cage_dir:="/tmp/wayland-run"}
+: ${bsdos_cage_outputs:="1"}
+: ${bsdos_cage_child:="/usr/local/bin/wl-keepalive"}
+: ${bsdos_cage_user:="root"}
+
+pidfile="/var/run/${name}.pid"
+command="/usr/sbin/daemon"
+procname="/usr/local/bin/cage"   # so rc.subr status/check matches the real proc, not /usr/sbin/daemon
+start_cmd="${name}_start"
+stop_cmd="${name}_stop"
+status_cmd="${name}_status"
+
+bsdos_cage_prestart() {
+    mkdir -p "${bsdos_cage_dir}"
+    chmod 777 "${bsdos_cage_dir}"
+
+    # Clean stale sockets/locks from previous run
+    rm -f "${bsdos_cage_dir}"/wayland-*.sock "${bsdos_cage_dir}"/*.lock 2>/dev/null
+
+    # Kill stale cage processes for this runtime dir
+    pkill -f "cage.*wl-keepalive" 2>/dev/null || true
+    sleep 1
+}
+
+bsdos_cage_wait_socket() {
+    local sock="${bsdos_cage_dir}/wayland-0"
+    local i=0
+    while [ $i -lt 30 ]; do
+        [ -S "$sock" ] && return 0
+        sleep 0.5
+        i=$((i + 1))
+    done
+    echo "${name}: timeout waiting for ${sock}" >&2
+    return 1
+}
+
+bsdos_cage_start() {
+    bsdos_cage_prestart
+
+    echo "Starting ${name}..."
+
+    daemon -p ${pidfile} -o "${bsdos_cage_dir}/cage.log" \
+        env XDG_RUNTIME_DIR="${bsdos_cage_dir}" \
+            WLR_BACKENDS=headless \
+            WLR_RENDERER=pixman \
+            WLR_HEADLESS_OUTPUTS=${bsdos_cage_outputs} \
+            LIBSEAT_BACKEND=noop \
+        /usr/local/bin/cage -- ${bsdos_cage_child}
+
+    if bsdos_cage_wait_socket; then
+        chmod 777 "${bsdos_cage_dir}/wayland-0" 2>/dev/null
+        echo "${name} started, socket: ${bsdos_cage_dir}/wayland-0"
+    else
+        echo "${name}: WARNING - socket not created, check ${bsdos_cage_dir}/cage.log"
+    fi
+}
+
+bsdos_cage_stop() {
+    echo "Stopping ${name}..."
+    if [ -f "${pidfile}" ]; then
+        local pid=$(cat ${pidfile} 2>/dev/null)
+        kill -TERM ${pid} 2>/dev/null
+        wait_for_pids ${pid} 2>/dev/null
+    fi
+    pkill -f "cage.*wl-keepalive" 2>/dev/null || true
+    rm -f "${pidfile}"
+}
+
+bsdos_cage_status() {
+    if [ -f "${pidfile}" ] && kill -0 $(cat ${pidfile} 2>/dev/null) 2>/dev/null; then
+        echo "${name} is running (pid $(cat ${pidfile}))"
+    else
+        echo "${name} is not running"
+    fi
+}
+
+run_rc_command "$1"

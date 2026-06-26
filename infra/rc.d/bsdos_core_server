@@ -1,0 +1,49 @@
+#!/bin/sh
+# PROVIDE: bsdos_core_server
+# REQUIRE: NETWORKING
+# KEYWORD: shutdown
+#
+# bsdOS core in SERVER role: pure Zenoh mesh node — telemetry + jail orchestration +
+# stream control-plane (bsdos/ctl/stream/*). No wayland gate (headless server has no
+# compositor; the binary tolerates the missing bridge). NO obfs (that's the dev/443 feature).
+#
+# Hardened daemon supervision: explicit start/stop/status keyed off the pidfile that
+# daemon(8) writes (-p). Avoids rc.subr procname-matching against /usr/sbin/daemon, which
+# made restart/stop/status unreliable. This is the canonical pattern for daemon-wrapped svcs.
+. /etc/rc.subr
+
+name="bsdos_core_server"
+rcvar="bsdos_core_server_enable"
+load_rc_config "$name"
+
+: ${bsdos_core_server_enable:="NO"}
+: ${bsdos_core_server_listen_ip:="${MYVM_IP:-127.0.0.1}"}
+: ${bsdos_core_server_listen_port:="7447"}
+: ${bsdos_core_server_bin:="/usr/local/bin/bsdos-core"}
+: ${bsdos_core_server_log:="/var/log/bsdos-core-server.log"}
+# Comma-separated autostream spec: "appTerminal:foot:,appBrowser:chrome:,appCowork:cowork:"
+: ${bsdos_core_server_autostream:=""}
+
+pidfile="/var/run/${name}.pid"
+start_cmd="_start"; stop_cmd="_stop"; status_cmd="_status"
+
+_running() { [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile" 2>/dev/null)" 2>/dev/null; }
+_start() {
+    if _running; then echo "$name already running as pid $(cat "$pidfile")."; return 0; fi
+    echo "Starting $name."
+    /usr/sbin/daemon -f -o "$bsdos_core_server_log" -p "$pidfile" \
+        /usr/bin/env \
+        ZENOH_LISTEN_IP="$bsdos_core_server_listen_ip" \
+        ZENOH_LISTEN_PORT="$bsdos_core_server_listen_port" \
+        BSDOS_AUTOSTREAM="$bsdos_core_server_autostream" \
+        "$bsdos_core_server_bin"
+}
+_stop() {
+    if _running; then echo "Stopping $name."; kill "$(cat "$pidfile")" 2>/dev/null; fi
+    rm -f "$pidfile"
+}
+_status() {
+    if _running; then echo "$name is running as pid $(cat "$pidfile")."
+    else echo "$name is not running."; fi
+}
+run_rc_command "$1"

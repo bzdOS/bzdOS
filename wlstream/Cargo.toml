@@ -1,0 +1,17 @@
+[package]
+name = "wlstream"
+version = "1.0.0"
+edition = "2021"
+license = "MIT"
+description = "Wayland stream protocol — parser, sender, compositor, LZ4 codec"
+repository = "https://github.com/bzdOS/wlstream"
+keywords = ["wayland", "streaming", "protocol", "remote-display"]
+categories = ["multimedia", "network-programming"]
+
+[dependencies]
+lz4_flex = "0.11"
+
+[dev-dependencies]
+
+[lib]
+name = "wlstream"

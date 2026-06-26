@@ -1,0 +1,52 @@
+# ── cage .jpk recipe — Wayland kiosk compositor ────────────────────────────
+# Per SPEC_2stream_squirrel.md §4: 2 cage instances (one per app per jail).
+# Per-arch (amd64 + aarch64). Cross-compiled per SPEC_squirrel_rootfs.md §11.3.
+
+[meta]
+schema_version = "1.0"
+id              = "org.bsdos.cage"
+version         = "0.1.4"
+name            = "cage"
+description     = "Wayland kiosk compositor (single-app, lightweight)"
+homepage        = "https://github.com/cage-kiosk/cage"
+license         = "MIT"
+authors         = ["cage-kiosk contributors", "bsdOS port team"]
+maintainer      = "ports@bsdos.org"
+
+[compatibility]
+bsdos_codename_min = "Squirrel"
+bsdos_codename_max = "Porcupine"
+freebsd_min        = "15.1"
+freebsd_max        = "16.0"
+arch               = ["amd64", "aarch64"]
+
+[runtime]
+type          = "jail"
+jail_name     = "system"
+needs_wayland = false
+needs_input   = true
+needs_gpu     = false
+needs_audio   = false
+needs_modem   = false
+
+[dependencies]
+wlroots = ">=0.17"
+
+[permissions]
+capabilities    = ["CAP_READ", "CAP_WRITE", "CAP_EVENT", "CAP_FSYNC"]
+network         = "unix-only"
+filesystem      = "rw"
+max_open_files  = 256
+max_memory_mb   = 64
+max_cpu_percent = 10
+max_disk_mb     = 32
+network_ingress = false
+network_egress  = false
+
+[update]
+channel     = "stable"
+auto_update = false
+
+[discovery]
+keywords = ["compositor", "wayland", "kiosk", "wm"]
+category = "System"

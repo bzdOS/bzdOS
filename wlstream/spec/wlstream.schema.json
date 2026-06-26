@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/bzdOS/wlstream/blob/main/spec/wlstream.schema.json",
+  "title": "wlstream v1 wire format",
+  "description": "JSON Schema describing the wlstream v1 wire format for documentation and code generation",
+  "type": "object",
+  "properties": {
+    "version": { "const": 1, "description": "Protocol version" },
+    "envelope": {
+      "type": "object",
+      "description": "Top-level framing",
+      "properties": {
+        "total_size": { "type": "integer", "minimum": 0, "maximum": 4294967295, "description": "u32 LE — size of all events in bytes" }
+      },
+      "required": ["total_size"]
+    },
+    "events": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Event" }
+    }
+  },
+  "required": ["version", "envelope", "events"],
+  "$defs": {
+    "Event": {
+      "type": "object",
+      "oneOf": [
+        { "$ref": "#/$defs/SurfaceCreate" },
+        { "$ref": "#/$defs/SurfaceDestroy" },
+        { "$ref": "#/$defs/PoolData" },
+        { "$ref": "#/$defs/SurfaceCommit" },
+        { "$ref": "#/$defs/CursorMove" },
+        { "$ref": "#/$defs/SessionReset" },
+        { "$ref": "#/$defs/StreamError" }
+      ],
+      "discriminator": { "propertyName": "event_type" }
+    },
+    "SurfaceCreate": {
+      "type": "object",
+      "properties": {
+        "event_type": { "const": "0x01" },
+        "surface_id": { "type": "integer", "minimum": 0, "maximum": 4294967295 }
+      },
+      "required": ["event_type", "surface_id"],
+      "wire_size": 5
+    },
+    "SurfaceDestroy": {
+      "type": "object",
+      "properties": {
+        "event_type": { "const": "0x02" },
+        "surface_id": { "type": "integer", "minimum": 0, "maximum": 4294967295 }
+      },
+      "required": ["event_type", "surface_id"],
+      "wire_size": 5
+    },
+    "PoolData": {
+      "type": "object",
+      "properties": {
+        "event_type": { "const": "0x03" },
+        "pool_id": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+        "width": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "height": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "stride": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+        "format": { "enum": [0, 1], "description": "0=ARGB8888, 1=XRGB8888" },
+        "raw_len": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+        "lz4_len": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+        "lz4_data": { "type": "string", "contentEncoding": "base64" }
+      },
+      "required": ["event_type", "pool_id", "width", "height", "stride", "format", "raw_len", "lz4_len", "lz4_data"],
+      "wire_header_size": 25,
+      "wire_total_size": "25 + lz4_len"
+    },
+    "SurfaceCommit": {
+      "type": "object",
+      "properties": {
+        "event_type": { "const": "0x04" },
+        "surface_id": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+        "pool_id": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+        "offset": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+        "buf_width": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "buf_height": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "buf_stride": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+        "format": { "enum": [0, 1] },
+        "damage_x": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "damage_y": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "damage_w": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "damage_h": { "type": "integer", "minimum": 0, "maximum": 65535 }
+      },
+      "required": ["event_type", "surface_id", "pool_id", "offset", "buf_width", "buf_height", "buf_stride", "format", "damage_x", "damage_y", "damage_w", "damage_h"],
+      "wire_size": 33
+    },
+    "CursorMove": {
+      "type": "object",
+      "properties": {
+        "event_type": { "const": "0x05" },
+        "x": { "type": "integer", "minimum": -2147483648, "maximum": 2147483647 },
+        "y": { "type": "integer", "minimum": -2147483648, "maximum": 2147483647 }
+      },
+      "required": ["event_type", "x", "y"],
+      "wire_size": 9
+    },
+    "SessionReset": {
+      "type": "object",
+      "properties": {
+        "event_type": { "const": "0xFE" },
+        "reason": { "enum": [0, 1, 2], "description": "0=compositor_restart, 1=app_exit, 2=error" },
+        "msg": { "type": "string", "maxLength": 255 }
+      },
+      "required": ["event_type", "reason", "msg"]
+    },
+    "StreamError": {
+      "type": "object",
+      "properties": {
+        "event_type": { "const": "0xFF" },
+        "code": { "enum": [1, 2, 3, 4, 255], "description": "0x0001=pool_not_found, 0x0002=surface_not_found, 0x0003=buffer_too_large, 0x0004=mmap_failed, 0x00FF=generic" },
+        "msg": { "type": "string", "maxLength": 255 }
+      },
+      "required": ["event_type", "code", "msg"]
+    }
+  }
+}

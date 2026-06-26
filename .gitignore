@@ -1,0 +1,14 @@
+target/
+.zig-cache/
+zig-out/
+artefacts/
+*.qcow2
+*.qcow2.xz
+*.img
+*.img.gz
+bsdos-key
+bsdos-key.pub
+certs/
+secrets/
+.env
+*.log

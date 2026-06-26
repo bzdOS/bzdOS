@@ -1,0 +1,15 @@
+[package]
+name = "bsdos-run"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "bsdos-run"
+path = "src/main.rs"
+
+[dependencies]
+clap     = { version = "4", features = ["derive"] }
+zip      = { version = "2", default-features = false, features = ["deflate", "bzip2", "zstd", "aes-crypto", "time"] }
+tempfile = "3"
+libc     = { workspace = true }
+thiserror = { workspace = true }

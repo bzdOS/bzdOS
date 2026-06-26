@@ -1,0 +1,19 @@
+# pkgset: bpi-headless — Banana Pi (Chimp v0.2) FIRST BOOT, headless.
+# Sourced by bsdos-build.sh Stage 2. One package per line; # = comment.
+#
+# BPI first boot is headless on purpose: no GUI, no compositor. The display
+# pipeline (cage/wayland/weston) is phase-2 Chimp work, NOT bring-up. Keep this
+# set minimal so the first image boots fast and proves the board + transport.
+#
+# Intentionally EXCLUDED (phase 2): cage, foot, wayland-protocols, wpewebkit-fdo.
+# bsdOS binaries (bsdos-core, bsdos-lifecycled, bsdos-hal, etc.) are
+# cross-compiled and staged in Stage 3-4, not installed via pkg.
+
+# Inter-node transport — needed to reach the board over Zenoh
+zenoh
+
+# Compression (data-plane dep)
+liblz4
+
+# regex (pkg dep)
+pcre2

@@ -1,0 +1,46 @@
+[package]
+name    = "bsdos-core"
+version = "0.1.0"
+edition = "2021"
+build = "build.rs"
+
+[lib]
+name = "bsdos_core"
+path = "src/lib.rs"
+
+[[bin]]
+name = "bsdos-core"
+path = "src/main.rs"
+required-features = ["with-bridge"]
+
+[[bin]]
+name = "bsdos-core-sub"
+path = "src/bin/sub.rs"
+required-features = ["with-bridge"]
+
+# Lib-only deps: pure std code, can be unit-tested without nightly rust
+# (zenoh pulls in stabby-abi which needs rust nightly `freeze` feature).
+[dependencies]
+tokio             = { workspace = true, features = ["process"] }
+tracing           = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+zenoh             = { workspace = true, optional = true }
+futures           = { workspace = true, optional = true }
+capnp             = "0.19"
+serde             = { version = "1", features = ["derive"] }
+toml              = "0.8"
+wlstream          = { path = "../wlstream" }
+thiserror         = { workspace = true }
+
+[build-dependencies]
+capnpc = "0.19"
+
+[features]
+default     = ["with-bridge"]
+with-bridge = ["dep:zenoh", "dep:futures"]
+
+# Integration tests that need the in-process Zenoh peer live in
+# tests/integration/ and have their own Cargo.toml that declares
+# zenoh-peer as a dev-dep. This way, `cargo test --lib
+# --no-default-features` for bsdos-core does not pull in zenoh
+# (which transitively requires nightly rust).

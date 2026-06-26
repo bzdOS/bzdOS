@@ -1,0 +1,69 @@
+# ── Phantom browser .jpk recipe for Squirrel v0.1.x ────────────────────────
+# Minimal wpewebkit-fdo webview in jail, exposes bsdos/app/appBrowser/stream
+# to Zenoh. Per SPEC_jpk_descriptor_v1.md + SPEC_squirrel_rootfs.md §11.7.
+# Per-arch (amd64 + aarch64).
+
+[meta]
+schema_version = "1.0"
+id              = "org.bsdos.phantom-browser"
+version         = "0.1.0"
+name            = "Phantom Browser"
+description     = "Minimal Wayland webview for bsdOS appBrowser stream"
+homepage        = "https://bsdos.org"
+license         = "BSD-2-Clause"
+authors         = ["bsdOS team"]
+maintainer      = "ports@bsdos.org"
+
+[compatibility]
+bsdos_codename_min = "Squirrel"
+bsdos_codename_max = "Porcupine"
+freebsd_min        = "15.1"
+freebsd_max        = "16.0"
+arch               = ["amd64", "aarch64"]
+
+[runtime]
+type          = "jail"
+jail_name     = "appBrowser"
+entrypoint    = "/opt/bsdos/bin/launch"
+needs_wayland = true
+needs_input   = true
+needs_gpu     = false
+needs_audio   = false
+needs_modem   = false
+
+[dependencies]
+wpewebkit_fdo = ">=2.38"
+cage          = ">=0.1.4"
+
+[permissions]
+capabilities    = ["CAP_READ", "CAP_WRITE", "CAP_EVENT"]
+network         = "inet"
+filesystem      = "private-tmpfs"
+max_open_files  = 1024
+max_memory_mb   = 512
+max_cpu_percent = 50
+max_disk_mb     = 256
+network_ingress = false
+network_egress  = true
+
+[hooks]
+pre_run  = "export XDG_RUNTIME_DIR=/tmp/wayland-run"
+post_run = "echo 'Phantom browser exited'"
+
+[build]
+source_url      = "https://github.com/bzdOS/phantom-browser"
+source_commit   = "HEAD"
+build_host      = "squirrel-builder"
+build_timestamp = "2026-06-15T20:00:00Z"
+build_user      = "bsdos-builder"
+reproducible    = true
+freebsd_version = "15.1-RELEASE"
+
+[update]
+channel     = "stable"
+auto_update = false
+
+[discovery]
+keywords = ["browser", "web", "wpe", "webkit"]
+category = "Network"
+icon     = "icon.svg"

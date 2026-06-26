@@ -1,0 +1,86 @@
+#!/bin/sh
+#
+# bsdos-tunnel-browser: Wayland wire proxy for browser pipeline
+#
+# PROVIDE: bsdos_tunnel_browser
+# REQUIRE: bsdos_cage_browser
+# BEFORE: bsdos_core_browser
+# KEYWORD: shutdown
+#
+# Add to /etc/rc.conf:
+#   bsdos_tunnel_browser_enable="YES"
+
+. /etc/rc.subr
+
+name="bsdos_tunnel_browser"
+rcvar="bsdos_tunnel_browser_enable"
+
+load_rc_config $name
+
+: ${bsdos_tunnel_browser_enable:="NO"}
+: ${bsdos_tunnel_browser_dir:="/tmp/wayland-browser"}
+: ${bsdos_tunnel_browser_compositor:="/tmp/wayland-browser/wayland-0"}
+: ${bsdos_tunnel_browser_ghost:="/tmp/wayland-browser/wayland-ghost"}
+: ${bsdos_tunnel_browser_stream:="/tmp/wayland-browser/stream.sock"}
+
+pidfile="/var/run/${name}.pid"
+command="/usr/sbin/daemon"
+procname="/usr/local/bin/wayland-tunnel"
+start_cmd="${name}_start"
+stop_cmd="${name}_stop"
+
+bsdos_tunnel_browser_wait_socket() {
+    local i=0
+    while [ $i -lt 30 ]; do
+        [ -S "${bsdos_tunnel_browser_ghost}" ] && [ -S "${bsdos_tunnel_browser_stream}" ] && return 0
+        sleep 0.5
+        i=$((i + 1))
+    done
+    echo "${name}: timeout waiting for sockets" >&2
+    return 1
+}
+
+bsdos_tunnel_browser_kill_stale() {
+    sockstat 2>/dev/null \
+        | awk '/wayland-tu.*wayland-browser/{print $3}' \
+        | sort -u \
+        | xargs -r kill -9 2>/dev/null || true
+    rm -f "${bsdos_tunnel_browser_ghost}" "${bsdos_tunnel_browser_ghost}.lock" \
+          "${bsdos_tunnel_browser_stream}" 2>/dev/null || true
+}
+
+bsdos_tunnel_browser_start() {
+    if [ ! -S "${bsdos_tunnel_browser_compositor}" ]; then
+        echo "${name}: compositor socket not found, skipping"
+        return 1
+    fi
+
+    bsdos_tunnel_browser_kill_stale
+    sleep 0.5
+
+    echo "Starting ${name}..."
+
+    daemon -p ${pidfile} -r -o "${bsdos_tunnel_browser_dir}/wayland-tunnel-browser.log" \
+        env XDG_RUNTIME_DIR="${bsdos_tunnel_browser_dir}" \
+            BSDOS_COMPOSITOR_SOCK="${bsdos_tunnel_browser_compositor}" \
+            BSDOS_GHOST_SOCK="${bsdos_tunnel_browser_ghost}" \
+            BSDOS_STREAM_SOCK="${bsdos_tunnel_browser_stream}" \
+        /usr/local/bin/wayland-tunnel
+
+    if bsdos_tunnel_browser_wait_socket; then
+        echo "${name} started"
+    else
+        echo "${name}: WARNING - sockets not created"
+    fi
+}
+
+bsdos_tunnel_browser_stop() {
+    echo "Stopping ${name}..."
+    if [ -f "${pidfile}" ]; then
+        kill -TERM $(cat ${pidfile} 2>/dev/null) 2>/dev/null || true
+        rm -f "${pidfile}"
+    fi
+    bsdos_tunnel_browser_kill_stale
+}
+
+run_rc_command "$1"
