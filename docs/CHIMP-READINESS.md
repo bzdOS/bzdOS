@@ -71,7 +71,7 @@ Detailed analysis + per-milestone validation in [`docs/BPI-M64-BOOT.md`](BPI-M64
 | Comptime platform flags resolve `bpi_m64` | ✅ | `platform.zig` — `-Dplatform=bpi_m64` → `Platform.bpi_m64`; dead phone-only branches eliminated at compile time |
 | BPI-M64 board constants | ✅ | `bpi_m64.zig` — SoC `Allwinner A64`, 4 cores, `i2c_buses` (`/dev/iic0..2`), `gpio0`, eth `awg0`, audio `/dev/dsp0` |
 | `has_i2c` true on BPI (A64 TWI) | ✅ | `i2c_sensor_bus = /dev/iic0`; `has_audio`/`has_backlight` also true on BPI |
-| Phone-only caps (`has_modem`/`has_sim`/`has_sms`/`has_gps`/sensors/`has_ghost_radio`/`has_predictive_touch`) | ⛔ (false on BPI) | Comptime-false for `bpi_m64` — these are Porcupine features; the M64 has none of that hardware. Code paths are eliminated, not stubbed-at-runtime. |
+| Phone-only caps (`has_modem`/`has_sim`/`has_sms`/`has_gps`/sensors/`has_ghost_radio`/`has_predictive_touch`) | ⛔ (false on BPI) | Comptime-false for `bpi_m64` — these are Woodpecker features; the M64 has none of that hardware. Code paths are eliminated, not stubbed-at-runtime. |
 | `cpu_stats` / battery / memory / uptime / hostname | ✅ | via `sysctl` (`kern.cp_time`, `vm.stats`, `kern.boottime`, `hw.acpi.*`) — arch-agnostic, work on A64 |
 | `telemetry` / `watchdog` | 🔄 | Modules present; `watchdog` text commands disabled pending Zig 0.15.2 migration (`processTextCmd` TODO) |
 | HAL command socket `/var/run/bsdos-hal.sock` (text protocol) | ✅ | tickless `accept()` loop; `hal_version` advertises implemented features |
@@ -106,8 +106,8 @@ config stage and that `bsdos_core` comes up over the board's real network
 | Excluded | Why | Lands in |
 |---|---|---|
 | GUI / weston / cage / wayland-tunnel pipeline | First boot is headless on purpose — prove board + Zenoh transport first | Chimp **phase 2** (after first boot) |
-| Lima / Mali GLES acceleration | Major kernel work; not needed to reach a login prompt or stream headless | Porcupine **stretch** — see [`PLAN-gpu-bringup.md`](../PLAN-gpu-bringup.md) §1.5/2 and `docs/specs/SPEC_lima_freebsd.md` |
-| Modem / SIM / SMS / GPS / sensors / haptic / ghost-radio | The BPI-M64 has none of this hardware (`has_*` comptime-false) | Porcupine (PinePhone) |
+| Lima / Mali GLES acceleration | Major kernel work; not needed to reach a login prompt or stream headless | Woodpecker **stretch** (oBzdOS/OpenBSD — needs separate OpenBSD Lima/weston audit) |
+| Modem / SIM / SMS / GPS / sensors / haptic / ghost-radio | The BPI-M64 has none of this hardware (`has_*` comptime-false) | Woodpecker (PinePhone, oBzdOS) |
 | Custom slim KERNCONF | GENERIC isolates the layout variable for bring-up | Chimp phase 2 (optimization) |
 | 2-stream demo (browser + terminal) | Moved to Squirrel (v0.1.x); depends on the GUI pipeline | Squirrel / Chimp phase 2 |
 

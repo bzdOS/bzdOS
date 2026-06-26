@@ -248,7 +248,7 @@ name            = "Test App"
 
 [compatibility]
 bsdos_codename_min = "Squirrel"
-bsdos_codename_max = "Porcupine"
+bsdos_codename_max = "Woodpecker"
 freebsd_min        = "15.1"
 freebsd_max        = "16.0"
 arch               = ["amd64", "aarch64"]
@@ -366,7 +366,7 @@ name = "Phantom Browser"
 
 [compatibility]
 bsdos_codename_min = "Squirrel"
-bsdos_codename_max = "Porcupine"
+bsdos_codename_max = "Woodpecker"
 freebsd_min = "15.1"
 freebsd_max = "16.0"
 arch = ["amd64"]

@@ -58,7 +58,7 @@ pub fn ipa_to_jpk_descriptor(bundle: &BundleInfo, policy: &JailPolicy) -> String
 
     // === [compatibility] ===
     out.push_str("[compatibility]\n");
-    push_kv_str(&mut out, "bsdos_codename_min", "Porcupine");
+    push_kv_str(&mut out, "bsdos_codename_min", "Woodpecker");
     push_kv_str(&mut out, "freebsd_min", "15.1");
     out.push_str("arch = ");
     out.push_str(arch);

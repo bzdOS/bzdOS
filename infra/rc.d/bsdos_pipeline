@@ -9,7 +9,7 @@
 # /etc/rc.conf variables:
 #   bsdos_pipeline_enable="YES"
 #   bsdos_pipeline_obfs_psk="<base64 key>"      # required
-#   bsdos_pipeline_listen_ip="<dev-vm-ip>"   # obfs listener IP
+#   bsdos_pipeline_listen_ip="203.0.113.11"   # obfs listener IP
 #   bsdos_pipeline_listen_port="443"             # obfs listener port
 #   bsdos_pipeline_rundir="/tmp/wayland-run"     # XDG_RUNTIME_DIR
 #   bsdos_pipeline_log_dir="/tmp"               # log directory

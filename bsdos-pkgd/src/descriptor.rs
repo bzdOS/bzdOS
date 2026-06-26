@@ -56,7 +56,7 @@ pub struct JpkMeta {
 pub struct JpkCompatibility {
     /// Earliest supported bsdOS codename (e.g. "Squirrel").
     pub bsdos_codename_min: String,
-    /// Latest tested codename (e.g. "Porcupine").
+    /// Latest tested codename (e.g. "Woodpecker").
     #[serde(default)]
     pub bsdos_codename_max: String,
     /// Minimum FreeBSD version, e.g. "15.1".

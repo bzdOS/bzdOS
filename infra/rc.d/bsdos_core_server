@@ -17,7 +17,7 @@ rcvar="bsdos_core_server_enable"
 load_rc_config "$name"
 
 : ${bsdos_core_server_enable:="NO"}
-: ${bsdos_core_server_listen_ip:="${MYVM_IP:-127.0.0.1}"}
+: ${bsdos_core_server_listen_ip:="203.0.113.12"}
 : ${bsdos_core_server_listen_port:="7447"}
 : ${bsdos_core_server_bin:="/usr/local/bin/bsdos-core"}
 : ${bsdos_core_server_log:="/var/log/bsdos-core-server.log"}

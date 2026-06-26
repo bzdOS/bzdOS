@@ -16,7 +16,7 @@
 2026-06-15 directive ("арм и амд равнозначный пока"):
 
 > Squirrel — multi-arch: **amd64 QEMU** (primary dev loop, KVM fast path)
-> AND **aarch64 QEMU** (architectural target, Chimp/Porcupine-ready).
+> AND **aarch64 QEMU** (architectural target, Chimp/Woodpecker-ready).
 > Both are first-class. RISC-V — ⛔ DEFERRED 2026-06-15.
 
 This spec defines a build pipeline that produces **two** rootfs images
@@ -28,7 +28,7 @@ without dropping amd64.
 Multi-arch rationale:
 - **amd64 = primary dev loop** (KVM acceleration, TCG fallback fast enough)
 - **aarch64 = architectural target** (catches alignment, endianness, NEON bugs early;
-  same arch as Chimp/Porcupine production hardware)
+  same arch as Chimp/Woodpecker production hardware)
 - **Both ship in same release** (`bsdos-squirrel-v0.1.3-amd64.img.gz` AND `-aarch64.img.gz`)
 
 ---
@@ -373,17 +373,17 @@ Per user 2026-06-15 ("арм и амд равнозначный пока"):
    Devs iterate here first.
 2. **aarch64 = architectural target** — catches alignment, endianness, NEON bugs
    early in QEMU (easier to debug than on real hardware). Same arch as
-   Chimp/Porcupine production hardware.
+   Chimp/Woodpecker production hardware.
 3. **Both ship in same release** — `bsdos-squirrel-v0.1.3-amd64.img.gz` AND
    `bsdos-squirrel-v0.1.3-aarch64.img.gz`. No "primary" or "secondary".
 4. **amd64 not a throwaway** — many dev hosts are amd64 (including the
-   existing bsdOS dev VM <dev-vm-ip>). Forcing aarch64 would slow
+   existing bsdOS dev VM 203.0.113.11). Forcing aarch64 would slow
    the inner loop unnecessarily.
 
 **Dev workflow:**
 - Inner loop: amd64 (KVM fast)
 - Validation: aarch64 (TCG slower but real)
-- Real hardware: Chimp/Porcupine (aarch64 only, this is where aarch64
+- Real hardware: Chimp/Woodpecker (aarch64 only, this is where aarch64
   code path meets real silicon)
 
 The build pipeline produces **both** images. CI tests **both**. CI fails
