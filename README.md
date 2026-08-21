@@ -64,7 +64,7 @@ The control plane uses a simple text protocol (`CMD ARG\n` / `+OK\n`) over virti
 | Codename | Target | Status |
 |---|---|---|
 | Squirrel | QEMU amd64 + aarch64 | v0.1.3 done |
-| Chimp | Banana Pi BPI-M64 (A64) | bring-up |
+| Chimp | Banana Pi BPI-M64 (A64) | bring-up — done under [bzdk](https://github.com/bzdOS/bzdk), with GPU via [lima-freebsd](https://github.com/bzdOS/lima-freebsd) |
 | Porcupine | PinePhone (A64) | planned |
 
 Both amd64 and aarch64 QEMU images are built from the same source tree. The aarch64 image is
@@ -128,6 +128,19 @@ The `bsdos-pkgd` crate handles build / inspect / verify / install. Recipes live 
 | `bsdos/ctl/stream/stop` | client | Stop stream command |
 
 ---
+
+## Related repositories
+
+Separate projects, built alongside this one. Listed with why they matter *to
+bzdOS* rather than as a link dump:
+
+| Repo | What it is | Why it matters here |
+|---|---|---|
+| [bzdk](https://github.com/bzdOS/bzdk) | A from-scratch bare-metal EL2 hypervisor for the Banana Pi M64, running FreeBSD 15.1 arm64 as its guest | The Chimp target's bring-up happened inside it. It is **not** bzdOS — a common confusion, since the names are close — but it is where the A64 hardware was actually understood: the clocks, the display pipeline, the eMMC and the GPU were all brought up under it, with the guest observable from outside while it ran |
+| [lima-freebsd](https://github.com/bzdOS/lima-freebsd) | The Mali-400 (lima) DRM driver for FreeBSD/arm64, plus the shmem GEM helper and platform-device bridge FreeBSD lacked | This is what gives the A64 platforms accelerated graphics. Both Chimp (BPI-M64) and Porcupine (PinePhone) are Allwinner A64 with a Mali-400 MP2, so it serves both. It also carries ten upstream patches — for FreeBSD base, drm-kmod and the ports tree — that its bring-up required |
+| [hubd](https://github.com/bzdOS/hubd) | Project tracker for teams of humans and AI agents: plain files, MCP server + CLI | How the above was coordinated when the build machine and the board were not the same machine and several agents worked in parallel |
+| [jailrun](https://github.com/bzdOS/jailrun) | A `docker run`-shaped OCI runtime backed by FreeBSD jails, with a ZFS image store | The same jail primitives this OS sandboxes apps with, exposed as a container runtime |
+| [SeMa](https://github.com/bzdOS/SeMa) | Semantic markup for source-code contracts | The convention the function contracts in these repositories are written in |
 
 ## License
 
