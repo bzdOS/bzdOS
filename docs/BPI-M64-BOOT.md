@@ -6,6 +6,20 @@
 > Recipe: [`infra/scripts/bpi-image.sh`](../infra/scripts/bpi-image.sh).
 > Date drafted: 2026-06-24. Codename: **Chimp** (v0.2, first real hardware).
 
+> **RESOLVED 2026-07-03 — the #1 risk (§6.1/§6.2) was real and is now fixed.**
+> The prebuilt `infra/u-boot/bananapi-m64/u-boot-sunxi-with-spl.bin` (mainline
+> 2026.07-rc5, 06-27) was built **without BL31**: the FIT inside had `atf` = **0
+> bytes** (`dumpimage -l` confirms). On A64/ARMv8 BL31 is mandatory — SPL inits
+> DRAM (this is why every FEL DRAM probe succeeded) then jumps to firmware=atf
+> @`0x44000` which was empty → **silent hang right after SPL**. This is why both
+> flashed SD images died with no console output. **Fix:** rebuilt ATF v2.10.0
+> `bl31` (`PLAT=sun50i_a64`, 37 KB) and U-Boot 2026.07-rc5 `bananapi_m64_defconfig`
+> with `BL31=bl31.bin`; the tracked blob now has `atf`=37077 bytes. FEL handoff
+> (SPL→BL31→U-Boot) verified: `sunxi-fel uboot <blob>` makes the FEL device leave
+> the USB bus. NB: stock sunxi-tools 1.4.2 cannot boot a FIT blob (legacy-uImage
+> only) — use the FIT-capable build. Full recipe + artifacts:
+> [`infra/u-boot/bananapi-m64/README-BL31-FIX.md`](../infra/u-boot/bananapi-m64/README-BL31-FIX.md).
+
 This is the **riskiest** part of Chimp bring-up. QEMU (Squirrel) boots via UEFI
 firmware (OVMF/edk2). The Banana Pi M64 (Allwinner **A64** SoC) has **no UEFI
 firmware on the board** — it boots through Allwinner's mask-ROM (BROM) and a
@@ -167,10 +181,10 @@ survived the `dd`.
      `u-boot-bananapi-m64` port exists, prefer it over pine64-lts.
 
 2. **ATF / BL31.** The A64 is ARMv8; a proper boot needs ARM Trusted Firmware
-   (BL31) for PSCI/secure-world. The FreeBSD u-boot-pine64-lts port **ASSUMPTION:**
-   already bundles BL31 into `u-boot-sunxi-with-spl.bin` (FIT image). If it does
-   not, SMP / power management will misbehave. **TODO(hardware):** verify SMP
-   comes up (`sysctl hw.ncpu` == 4 on A64).
+   (BL31) for PSCI/secure-world. **CONFIRMED 2026-07-03 (see RESOLVED note up top):
+   the shipped blob had NO BL31 (empty `atf` in the FIT) → dead boot.** Fixed by
+   rebuilding U-Boot with `BL31=` (ATF v2.10.0 `PLAT=sun50i_a64`). **TODO(hardware):**
+   still verify SMP comes up (`sysctl hw.ncpu` == 4 on A64) on first real boot.
 
 3. **Console UART device name.** The fragment uses `comconsole` @ 115200.
    **TODO(hardware):** confirm the FreeBSD loader/kernel name for the A64 debug
@@ -200,7 +214,8 @@ Prep (on the FreeBSD build host / dev-vm):
 - [ ] Sanity-inspect: `gpart show -p` (via md) shows p1 reserve / p2 ufs / p3 swap, GPT intact.
 
 Flash + boot (hardware):
-- [ ] Flash a real SD card: `dd if=bsdos-chimp-bpi-m64.img of=/dev/daX bs=1m conv=sync` (X = card reader).
+- [ ] Flash a real SD card: `dd if=bsdos-chimp-bpi-m64.img of=/dev/daX bs=1m` (X = card reader).
+      **NEVER use `conv=sync` with a `gunzip -c … | dd` pipe** — it zero-pads each short pipe read up to `bs`, inflating a 2.4 GB image into tens of GB of misaligned garbage (overflows the card at ~99%, corrupts the layout so the BROM finds no SPL). Decompress to a file first, or pipe without `conv=sync`. (Burned us 2026-07-02.)
 - [ ] Wire a **3.3V USB-UART** to the BPI-M64 GPIO debug header (GND / TX / RX). **Never** feed 5V — A64 GPIO is 3.3V.
 - [ ] Open the serial console at **115200 8N1** (`cu -l /dev/cuaU0 -s 115200` or `tio`).
 - [ ] Insert SD, power on. **Milestone 1:** SPL/U-Boot banner on UART (proves layout + DRAM init).
@@ -219,6 +234,6 @@ the bootloader → revisit §4 (DTB) and §6.4 (root device).
 
 *Related:* `infra/scripts/bpi-image.sh` (recipe), `infra/scripts/squirrel-build.sh`
 (QEMU UEFI precedent, Stage 6), `docs/specs/SPEC_chimp_release.md` §9 (device
-bring-up phases), `docs/v0.2-release-plan.md` (Chimp / BPI-M64 target),
-`PLAN-arm64-crosscompile.md` (aarch64 toolchain), `DESIGN-boot-sequence.md`
+bring-up phases), `docs/archive/2026-10-01-monorepo/v0.2-release-plan.md` (Chimp / BPI-M64 target),
+`docs/archive/2026-10-01-monorepo/PLAN-arm64-crosscompile.md` (aarch64 toolchain), `docs/archive/2026-10-01-monorepo/DESIGN-boot-sequence.md`
 (post-kernel init chain).
