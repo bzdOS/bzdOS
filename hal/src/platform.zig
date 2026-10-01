@@ -29,11 +29,11 @@ const build_options = @import("build_options");
 pub const Platform = enum {
     // QEMU amd64 — primary dev loop (KVM, Squirrel v0.1.x)
     qemu_amd64,
-    // QEMU aarch64 — architectural target (Squirrel v0.1.x, Chimp/Porcupine-ready)
+    // QEMU aarch64 — architectural target (Squirrel v0.1.x, Chimp/Woodpecker-ready)
     qemu_aarch64,
     // Banana Pi BPI-M64 (Allwinner A64, Chimp v0.2)
     bpi_m64,
-    // Pine64 PinePhone (Allwinner A64 + Mali-400 — same SoC as BPI-M64; Porcupine v0.3)
+    // Pine64 PinePhone (Allwinner A64 + Mali-400; Woodpecker v0.3, oBzdOS)
     pinephone,
 };
 // Platform:end

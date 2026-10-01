@@ -724,7 +724,7 @@ pub fn main() !void {
     // Comptime guards: каждая ветка вырезается целиком на платформах без флага.
     // BPI-M64 (Chimp): has_i2c + has_audio + has_backlight → true; modem/sim/sms/
     //   gps/accelerometer/magnetometer/proximity/haptic/ghost_radio → false.
-    // PinePhone (Porcupine): все флаги true.
+    // PinePhone (Woodpecker v0.3, oBzdOS): все флаги true.
     // QEMU amd64/aarch64 (Squirrel): только cross-platform (cpu/uptime/mem/battery).
     // Реальной инициализации железа здесь нет — все модули открывают устройства
     // per-command on demand; этот блок только логирует профиль возможностей.
