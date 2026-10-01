@@ -12,3 +12,15 @@ certs/
 secrets/
 .env
 *.log
+
+# Host data and secrets never live here (see /etc/bsdos/hosts.env)
+*.qcow2
+*.qcow2.xz
+*.iso
+*.img
+artefacts/
+bsdos-key
+certs/*.key
+infra/secrets/
+guest-agent/zig-out/
+guest-agent/.zig-cache/

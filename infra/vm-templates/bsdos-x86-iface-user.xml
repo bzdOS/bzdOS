@@ -1,0 +1,3 @@
+<interface type='user'>
+  <model type='virtio'/>
+</interface>

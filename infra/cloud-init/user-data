@@ -1,0 +1,16 @@
+#cloud-config
+ssh_authorized_keys:
+  - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHlmLhox6+SgM5XtDkOW7CMI5SRSvSJASqAsFrzwsIIu bsdos-dev
+
+runcmd:
+  - mkdir -p /root/.ssh
+  - chmod 700 /root/.ssh
+  - cp /home/freebsd/.ssh/authorized_keys /root/.ssh/authorized_keys
+  - chmod 600 /root/.ssh/authorized_keys
+  - grep -q 'PermitRootLogin' /etc/ssh/sshd_config && sed -i '' 's/.*PermitRootLogin.*/PermitRootLogin without-password/' /etc/ssh/sshd_config || echo 'PermitRootLogin without-password' >> /etc/ssh/sshd_config
+  - service sshd restart
+  - pkg install -y sudo
+  - echo 'freebsd ALL=(ALL) NOPASSWD:ALL' >> /usr/local/etc/sudoers
+  - grep -q bsdos_agent_enable /etc/rc.conf || echo 'bsdos_agent_enable="YES"' >> /etc/rc.conf
+  - cp /mnt/bsdos/infra/rc.d/bsdos_agent /usr/local/etc/rc.d/bsdos_agent
+  - chmod +x /usr/local/etc/rc.d/bsdos_agent

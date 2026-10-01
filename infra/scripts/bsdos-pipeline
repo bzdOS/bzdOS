@@ -1,0 +1,219 @@
+#!/bin/sh
+# bsdos-pipeline: unified supervisor for cage → wayland-tunnel → bsdos-core
+#
+# @deprecated (2026-07-03, #146): This script is the LEGACY single-stream pipeline.
+# Production streams are managed by bsdos-core StreamManager (stream_manager.rs)
+# which replaced this script.  bsdos-pipeline is kept for:
+#   - dev-vm dev-VM obfs relay (which does not run streams locally; it just forwards)
+#   - emergency fallback / single-stream debugging
+#
+# KEEPALIVE STATUS (#146): wl-keepalive usage here is NOT yet removed — this script
+# pre-dates the cage -s fix.  TODO: replace `cage -- $CAGE_CHILD` with `cage -s` + FIFO
+# once this script is promoted or removed.  The CAGE_CHILD env remains as-is so
+# existing rc.conf deployments are not broken.
+#
+# Starts all components in order, monitors them, and restarts the whole group
+# if any critical component (cage/tunnel/core) exits unexpectedly.
+# SIGTERM → kills all children cleanly → exits (daemon -r won't restart after SIGTERM).
+#
+# Env vars (set by rc.d service from rc.conf):
+#   BSDOS_RUNDIR          default: /tmp/wayland-run
+#   BSDOS_LOG_DIR         default: /tmp
+#   BSDOS_OBFS_PSK        required for obfs mode
+#   BSDOS_LISTEN_IP       default: 0.0.0.0
+#   BSDOS_LISTEN_PORT     default: 443
+#   BSDOS_CAGE_CHILD      default: /usr/local/bin/wl-keepalive (DEPRECATED — see #146)
+#   BSDOS_FOOT_CMD        default: foot sh -c 'while true; do date; uptime; sleep 1; done'
+
+set -u
+
+RUNDIR="${BSDOS_RUNDIR:-/tmp/wayland-run}"
+LOG_DIR="${BSDOS_LOG_DIR:-/tmp}"
+OBFS_PSK="${BSDOS_OBFS_PSK:-}"
+LISTEN_IP="${BSDOS_LISTEN_IP:-0.0.0.0}"
+LISTEN_PORT="${BSDOS_LISTEN_PORT:-443}"
+CAGE_CHILD="${BSDOS_CAGE_CHILD:-/usr/local/bin/wl-keepalive}"
+# BSDOS_APP: "firefox" (default) or "foot" for the Wayland app in tunnel
+APP="${BSDOS_APP:-firefox}"
+APP_USER="${BSDOS_APP_USER:-freebsd}"
+APP_URL="${BSDOS_APP_URL:-about:blank}"
+STREAM_TOPIC="${BSDOS_STREAM_TOPIC:-bsdos/app/appBrowser/stream}"
+
+CAGE_PID=""
+TUNNEL_PID=""
+APP_PID=""
+CORE_PID=""
+
+log() { echo "[pipeline] $*" >&2; }
+
+kill_all() {
+    log "killing all components"
+    for pid in $CAGE_PID $TUNNEL_PID $APP_PID $CORE_PID; do
+        kill -9 "$pid" 2>/dev/null || true
+    done
+    CAGE_PID="" TUNNEL_PID="" APP_PID="" CORE_PID=""
+    pkill -9 -f "cage -- " 2>/dev/null || true
+    pkill -9 -f "/usr/local/bin/wl-keepalive" 2>/dev/null || true
+    pkill -9 -f "/usr/local/bin/wayland-tunnel" 2>/dev/null || true
+    pkill -9 -f "/usr/local/bin/bsdos-core" 2>/dev/null || true
+    pkill -u "$APP_USER" -9 -f "firefox|chromium" 2>/dev/null || true
+}
+
+on_sigterm() {
+    log "SIGTERM received, shutting down"
+    kill_all
+    exit 0
+}
+trap on_sigterm TERM INT
+
+wait_socket() {
+    local path="$1" i=0
+    while [ $i -lt 30 ]; do
+        [ -S "$path" ] && return 0
+        sleep 0.5
+        i=$((i + 1))
+    done
+    log "timeout waiting for socket: $path"
+    return 1
+}
+
+start_pipeline() {
+    # Rotate logs (clean slate for this run)
+    : > "$LOG_DIR/cage.log"
+    : > "$LOG_DIR/wayland-tunnel.log"
+    : > "$LOG_DIR/bsdos-core.log"
+    : > "$LOG_DIR/foot.log"
+
+    # Clean runtime dir
+    rm -rf "$RUNDIR"
+    mkdir -p "$RUNDIR"
+    chmod 777 "$RUNDIR"
+
+    # 1. cage — headless compositor
+    log "starting cage"
+    env XDG_RUNTIME_DIR="$RUNDIR" \
+        WLR_BACKENDS=headless \
+        WLR_RENDERER=pixman \
+        WLR_HEADLESS_OUTPUTS=1 \
+        LIBSEAT_BACKEND=noop \
+        /usr/local/bin/cage -- "$CAGE_CHILD" \
+        >> "$LOG_DIR/cage.log" 2>&1 &
+    CAGE_PID=$!
+
+    wait_socket "$RUNDIR/wayland-0" || return 1
+    chmod 777 "$RUNDIR/wayland-0" 2>/dev/null || true
+
+    # 2. wayland-tunnel — Wayland proxy + stream server
+    log "starting wayland-tunnel"
+    env XDG_RUNTIME_DIR="$RUNDIR" \
+        BSDOS_COMPOSITOR_SOCK="$RUNDIR/wayland-0" \
+        BSDOS_GHOST_SOCK="$RUNDIR/wayland-ghost-0" \
+        BSDOS_STREAM_SOCK="$RUNDIR/wayland-stream.sock" \
+        /usr/local/bin/wayland-tunnel \
+        >> "$LOG_DIR/wayland-tunnel.log" 2>&1 &
+    TUNNEL_PID=$!
+
+    wait_socket "$RUNDIR/wayland-stream.sock" || return 1
+
+    # 3. app (firefox or foot) running through tunnel
+    log "starting app: $APP"
+    case "$APP" in
+    firefox)
+        # Firefox must run as non-root user; needs MOZ_ENABLE_WAYLAND=1
+        su -m "$APP_USER" -c \
+            "env XDG_RUNTIME_DIR='$RUNDIR' \
+                 WAYLAND_DISPLAY=wayland-ghost-0 \
+                 MOZ_ENABLE_WAYLAND=1 \
+                 HOME=/home/$APP_USER \
+             /usr/local/bin/firefox --new-instance --no-remote '$APP_URL'" \
+        >> "$LOG_DIR/app.log" 2>&1 &
+        ;;
+    foot)
+        env XDG_RUNTIME_DIR="$RUNDIR" \
+            WAYLAND_DISPLAY="wayland-ghost-0" \
+            /usr/local/bin/foot sh -c 'while true; do date; uptime; sleep 1; done' \
+        >> "$LOG_DIR/app.log" 2>&1 &
+        ;;
+    *)
+        log "unknown app: $APP, falling back to foot"
+        env XDG_RUNTIME_DIR="$RUNDIR" \
+            WAYLAND_DISPLAY="wayland-ghost-0" \
+            /usr/local/bin/foot sh -c 'while true; do date; uptime; sleep 1; done' \
+        >> "$LOG_DIR/app.log" 2>&1 &
+        ;;
+    esac
+    APP_PID=$!
+    sleep 2
+
+    # 4. bsdos-core — Zenoh publisher (obfs mode)
+    log "starting bsdos-core"
+    env ZENOH_OBFS=1 \
+        BSDOS_OBFS_PSK="$OBFS_PSK" \
+        ZENOH_LISTEN_IP="$LISTEN_IP" \
+        ZENOH_LISTEN_PORT="$LISTEN_PORT" \
+        BSDOS_STREAM_SOCK="$RUNDIR/wayland-stream.sock" \
+        BSDOS_RUNDIR="$RUNDIR" \
+        BSDOS_STREAM_TOPIC="$STREAM_TOPIC" \
+        RUST_LOG=zenoh=info,zenoh_link_obfs=debug \
+        /usr/local/bin/bsdos-core \
+        >> "$LOG_DIR/bsdos-core.log" 2>&1 &
+    CORE_PID=$!
+    sleep 2
+
+    log "all started: cage=$CAGE_PID tunnel=$TUNNEL_PID app=$APP_PID core=$CORE_PID"
+}
+
+# Outer restart loop
+while true; do
+    start_pipeline || {
+        log "startup failed, retrying in 5s"
+        kill_all
+        sleep 5
+        continue
+    }
+
+    # START_HEALTH_CHECK
+    #   purpose: verify end-to-end frame delivery after startup
+    #   checks: (1) tunnel accepted stream client (2) core received POOL_DATA
+    #   timeout: 15 seconds
+    #   onFailure: restart whole pipeline
+    log "health check: waiting for stream client + POOL_DATA"
+    healthy=0
+    i=0
+    while [ $i -lt 15 ]; do
+        sleep 1
+        if grep -q 'Stream client connected' "$LOG_DIR/wayland-tunnel.log" 2>/dev/null && \
+           grep -q 'POOL_DATA received' "$LOG_DIR/bsdos-core.log" 2>/dev/null; then
+            healthy=1
+            log "health check passed: end-to-end frame delivery confirmed"
+            break
+        fi
+        i=$((i + 1))
+    done
+    if [ $healthy -eq 0 ]; then
+        log "health check FAILED: no frame delivery within 15s, restarting"
+        kill_all
+        sleep 2
+        continue
+    fi
+    # END_HEALTH_CHECK
+
+    # Monitor critical components; foot is optional, skip it
+    died=0
+    while [ "$died" -eq 0 ]; do
+        sleep 2
+        for cname_pid in "cage:$CAGE_PID" "tunnel:$TUNNEL_PID" "core:$CORE_PID"; do
+            cname="${cname_pid%%:*}"
+            cpid="${cname_pid##*:}"
+            [ -z "$cpid" ] && continue
+            if ! kill -0 "$cpid" 2>/dev/null; then
+                log "$cname (pid=$cpid) died, restarting pipeline"
+                died=1
+                break
+            fi
+        done
+    done
+
+    kill_all
+    sleep 2
+done

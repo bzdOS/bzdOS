@@ -1,0 +1,30 @@
+#!/bin/sh
+# agent-exec [-t TIMEOUT] COMMAND...
+# Send EXEC command to guest agent via vport socket. No source needed.
+#
+# Usage:
+#   agent-exec "uname -a"
+#   agent-exec -t 600 "cargo build --release"
+
+SOCK="${AGENT_VPORT_SOCK:-}"
+if [ -z "$SOCK" ]; then
+    if [ -S /tmp/bsdos-agent-vport-x86.sock ]; then
+        SOCK=/tmp/bsdos-agent-vport-x86.sock
+    else
+        SOCK=/tmp/bsdos-agent-vport.sock
+    fi
+fi
+
+TIMEOUT=30
+if [ "${1:-}" = "-t" ]; then
+    TIMEOUT="$2"; shift 2
+fi
+
+if [ $# -eq 0 ]; then
+    echo "usage: agent-exec [-t timeout] COMMAND" >&2
+    exit 1
+fi
+
+printf 'EXEC %s\n' "$*" \
+    | nc -w"$TIMEOUT" -U "$SOCK" \
+    | awk 'NR==1{ok=($0~/^\+OK/); next} /^\.$/{exit} {print}'

@@ -1,0 +1,21 @@
+<!--
+  Блок для инъекции в <devices> домена myvm (RUNBOOK-myvm-virtio-serial.md §8).
+  Точное зеркало infra/vm-templates/bsdos-x86-kvm.xml:74-86 (канон dev-vm),
+  отличается только path host-сокета (-myvm).
+  Порядок объявлений СТРОГО: spicevmc первым (port 1) → agent вторым (port 2 → /dev/ttyV0.2).
+  Вставлять без <devices>-обёртки, напр. после </console> в dumpxml myvm.
+-->
+    <!-- ==== virtio-serial: agent channel (agent-паритет с bsdos-x86/dev-vm) ==== -->
+    <controller type='virtio-serial' index='0'/>
+
+    <!-- port 1 — заглушка (spice-дисплея на prod нет, state=disconnected — норма).
+         НЕ УДАЛЯТЬ: без неё agent уедет на port 1 → /dev/ttyV0.1 → rc.d self-skip. -->
+    <channel type='spicevmc'>
+      <target type='virtio' name='com.redhat.spice.0'/>
+    </channel>
+
+    <!-- port 2 — bsdOS agent. Host socket: /tmp/bsdos-agent-vport-myvm.sock -->
+    <channel type='unix'>
+      <source mode='bind' path='/tmp/bsdos-agent-vport-myvm.sock'/>
+      <target type='virtio' name='bsdos.agent'/>
+    </channel>

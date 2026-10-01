@@ -1,0 +1,97 @@
+<!--
+  bsdOS dev VM — libvirt domain для разработки
+  Управление: make vm-define → make vm-start → make vm-spice
+  Display: SPICE на 127.0.0.1 (autoport) + серийная консоль через virsh console
+  Сеть: user-mode, portfwd 2222→22 (SSH), 9999→9999 (broker TCP)
+  CPU: cortex-a72 TCG (не KVM — гость aarch64 на x86 хосте)
+-->
+<domain type='qemu'>
+  <name>bsdos-dev</name>
+  <memory unit='MiB'>4096</memory>
+  <vcpu placement='static'>2</vcpu>
+
+  <os firmware='efi'>
+    <type arch='aarch64' machine='virt'>hvm</type>
+    <loader readonly='yes' type='pflash'>/usr/share/AAVMF/AAVMF_CODE.no-secboot.fd</loader>
+    <nvram template='/usr/share/AAVMF/AAVMF_VARS.fd'>/var/lib/libvirt/qemu/nvram/bsdos-dev_VARS.fd</nvram>
+  </os>
+
+  <features>
+    <gic version='2'/>
+  </features>
+
+  <cpu mode='custom' match='exact' check='none'>
+    <model fallback='forbid'>cortex-a72</model>
+  </cpu>
+
+  <clock offset='utc'/>
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>destroy</on_crash>
+
+  <devices>
+    <emulator>/usr/bin/qemu-system-aarch64</emulator>
+
+    <!-- Boot disk: FreeBSD 14.4 aarch64 -->
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2' cache='writeback'/>
+      <source file='/srv/bsdos/freebsd14.qcow2'/>
+      <target dev='vda' bus='virtio'/>
+    </disk>
+
+    <!-- cloud-init seed (ro) -->
+    <disk type='file' device='cdrom'>
+      <driver name='qemu' type='raw'/>
+      <source file='/srv/bsdos/seed.iso'/>
+      <target dev='sda' bus='scsi'/>
+      <readonly/>
+    </disk>
+
+    <controller type='scsi' index='0' model='virtio-scsi'/>
+
+    <!-- User-mode network: SSH :2222, broker :9999 (TCP hostfwd) -->
+    <interface type='user'>
+      <model type='virtio'/>
+      <portforward proto='tcp'>
+        <range start='2222' to='22'/>
+      </portforward>
+      <portforward proto='tcp'>
+        <range start='9999' to='9999'/>
+      </portforward>
+    </interface>
+
+    <!-- Serial console: virsh console bsdos-dev -->
+    <serial type='pty'>
+      <target type='isa-serial' port='0'/>
+    </serial>
+    <console type='pty'>
+      <target type='serial' port='0'/>
+    </console>
+
+    <!-- SPICE display: virt-viewer spice://127.0.0.1:PORT -->
+    <graphics type='spice' autoport='yes'>
+      <listen type='address' address='127.0.0.1'/>
+      <image compression='off'/>
+      <jpeg compression='never'/>
+      <zlib compression='never'/>
+      <playback compression='off'/>
+      <streaming mode='filter'/>
+    </graphics>
+
+    <!-- VGA framebuffer — FreeBSD EFI boot + future DRM-KMS -->
+    <video>
+      <model type='vga' vram='16384' heads='1' primary='yes'/>
+    </video>
+
+    <memballoon model='virtio'/>
+
+    <rng model='virtio'>
+      <backend model='random'>/dev/urandom</backend>
+    </rng>
+
+    <!-- vsock: прямой канал хост↔гость без portfwd, гость получает CID от QEMU -->
+    <vsock model='virtio'>
+      <cid auto='no' address='3'/>
+    </vsock>
+  </devices>
+</domain>

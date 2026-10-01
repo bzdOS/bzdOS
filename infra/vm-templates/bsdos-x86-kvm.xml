@@ -1,0 +1,113 @@
+<!--
+  bsdOS x86 KVM VM — headless libvirt domain
+  Wayland: cage headless → wayland-tunnel.zig → Zenoh → Mac client
+  Display: SPICE (TTY debug только), реальный Wayland дисплей на Mac через Zenoh
+  GPU: не нужен (Wayland рендерится на Mac, не в VM)
+  Transport: virtio-console (агент), 9p shared FS
+-->
+<domain type='kvm'>
+  <name>bsdos-x86</name>
+  <memory unit='MiB'>4096</memory>
+  <vcpu placement='static'>16</vcpu>
+
+  <os firmware='efi'>
+    <type arch='x86_64' machine='q35'>hvm</type>
+    <loader readonly='yes' type='pflash'>/usr/share/OVMF/OVMF_CODE_4M.fd</loader>
+    <nvram template='/usr/share/OVMF/OVMF_VARS_4M.fd'>/var/lib/libvirt/qemu/nvram/bsdos-x86_VARS.fd</nvram>
+    <boot dev='hd'/>
+  </os>
+
+  <features>
+    <acpi/>
+    <apic/>
+  </features>
+
+  <cpu mode='host-passthrough' check='none'>
+    <topology sockets='1' cores='16' threads='1'/>
+  </cpu>
+
+  <clock offset='utc'>
+    <timer name='rtc' tickpolicy='catchup'/>
+    <timer name='pit' tickpolicy='delay'/>
+    <timer name='hpet' present='no'/>
+  </clock>
+
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>destroy</on_crash>
+
+  <pm>
+    <suspend-to-mem enabled='no'/>
+    <suspend-to-disk enabled='no'/>
+  </pm>
+
+  <devices>
+    <emulator>/usr/bin/qemu-system-x86_64</emulator>
+
+    <!-- Boot disk: FreeBSD 15.1 x86_64 -->
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2' cache='writeback'/>
+      <source file='/srv/bsdos/freebsd-x86-15.1.qcow2'/>
+      <target dev='vda' bus='virtio'/>
+    </disk>
+
+    <!-- cloud-init seed (ro) -->
+    <disk type='file' device='cdrom'>
+      <driver name='qemu' type='raw'/>
+      <source file='/srv/bsdos/seed.iso'/>
+      <target dev='sda' bus='scsi'/>
+      <readonly/>
+    </disk>
+
+    <controller type='scsi' index='0' model='virtio-scsi'/>
+
+    <!-- Network: через qemu:commandline ниже (hostfwd) -->
+
+    <!-- SPICE: только для TTY отладки, без GL -->
+    <graphics type='spice' port='5910' listen='127.0.0.1'/>
+
+    <!-- QXL для SPICE TTY (не нужен GPU акселератор) -->
+    <video>
+      <model type='qxl' ram='65536' vram='65536' heads='1' primary='yes'/>
+    </video>
+
+    <!-- virtio-serial для агента и SPICE -->
+    <controller type='virtio-serial' index='0'/>
+
+    <!-- SPICE vdagent channel -->
+    <channel type='spicevmc'>
+      <target type='virtio' name='com.redhat.spice.0'/>
+    </channel>
+
+    <!-- bsdOS agent channel (virtio-console) -->
+    <channel type='unix'>
+      <source mode='bind' path='/tmp/bsdos-agent-vport-x86.sock'/>
+      <target type='virtio' name='bsdos.agent'/>
+    </channel>
+
+    <!-- 9p shared FS: /srv/bsdos → /mnt/bsdos в госте -->
+    <filesystem type='mount' accessmode='mapped'>
+      <source dir='/srv/bsdos'/>
+      <target dir='bsdos'/>
+      <driver type='path'/>
+    </filesystem>
+
+    <!-- QMP socket + port forwarding -->
+    <qemu:commandline xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0'>
+      <!-- Port forwarding через user-net -->
+      <qemu:arg value='-netdev'/>
+      <qemu:arg value='user,id=n0,hostfwd=tcp::2222-:22,hostfwd=tcp::9999-:9999,hostfwd=tcp::7447-:7447,hostfwd=tcp::9222-:9222,hostfwd=tcp::5901-:5901'/>
+      <qemu:arg value='-device'/>
+      <qemu:arg value='virtio-net-pci,netdev=n0'/>
+      <qemu:arg value='-qmp'/>
+      <qemu:arg value='unix:/tmp/bsdos-qmp-x86.sock,server=on,wait=off'/>
+    </qemu:commandline>
+
+    <!-- Serial console -->
+    <serial type='file'>
+      <source path='/srv/bsdos/artefacts/logs/serial-x86.log'/>
+      <target type='isa-serial' port='0'/>
+    </serial>
+
+  </devices>
+</domain>
