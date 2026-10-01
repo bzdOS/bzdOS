@@ -1,0 +1,21 @@
+# FreeBSD kernel module Makefile for mali_uio
+#
+# purpose:   Build mali_uio.ko from mali_uio.c using the FreeBSD kernel
+#            module build infrastructure.
+# usage:
+#   On dev VM (dev-vm, FreeBSD 15.1 aarch64):
+#     cp -r /mnt/bsdos/hal/mali_uio* /usr/src/sys/modules/mali_uio/
+#     cd /usr/src/sys/modules/mali_uio && make
+#   Or build in-place (requires kernel source headers in /usr/src/sys):
+#     cd /mnt/bsdos/hal && make -f mali_uio_Makefile
+#
+# Output: mali_uio.ko  (load with: kldload ./mali_uio.ko)
+# Unload: kldunload mali_uio
+
+KMOD=	mali_uio
+SRCS=	mali_uio.c
+
+# Extra include path so the kernel build finds our mali_uio.h
+CFLAGS+= -I${.CURDIR}
+
+.include <bsd.kmod.mk>
