@@ -5,7 +5,7 @@ set -eu
 ZIG="${ZIG:-zig}"
 SCRIPT_DIR="$(dirname "$0")"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-ZIG_DIR="$PROJECT_DIR/sys-daemon-zig"
+ZIG_DIR="$PROJECT_DIR/hal"
 
 echo "Building bsdos-hal for aarch64-freebsd.14..."
 cd "$ZIG_DIR"

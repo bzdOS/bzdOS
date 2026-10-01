@@ -15,7 +15,7 @@
 // Platform-aware lifecycle policy.
 //
 // The policy is resolved entirely at compile time from the capability cfgs that
-// `infra/rust/platform_build.rs` emits (mirrors sys-daemon-zig/src/platform.zig):
+// `infra/rust/platform_build.rs` emits (mirrors hal/src/platform.zig):
 //   - cfg(bsdos_has_battery)  → pinephone only → aggressive, compression on
 //   - everything else (qemu_amd64 / qemu_aarch64 / bpi_m64) → relaxed, compression off
 //

@@ -186,7 +186,7 @@ src/
 
 - **105/105 source файлов** с `START_AI_HEADER` / `END_AI_HEADER` (Rust + Zig + module headers, build configs)
 - **~918 function-region markers** (`name:start` / `name:end`)
-- **sys-daemon-zig/ наполнен реальными контрактами** (17 файлов, 268 region markers, 0 TODO-плейсхолдеров)
+- **hal/ наполнен реальными контрактами** (17 файлов, 268 region markers, 0 TODO-плейсхолдеров)
 - `make sema-check` → OK (валидатор в github.com/bzdOS/sema)
 - Скрипт разметки: `/tmp/audit-markup.py` (idempotent, brace-matching для `:end` placement)
 
@@ -337,7 +337,7 @@ input events → input.zig → inject directly to client_fd using captured IDs
 | `make wayland-tunnel-test` | `wayland-tunnel/src/test_wayland_parse.zig` | 6 |
 | `make wayland-input-test` | `wayland-tunnel/src/input.zig` (нужен libc + sys/mman.h) | 3 |
 | `make wayland-stream-test` | `wayland-tunnel/src/test_stream.zig` (header encoding) | 14 |
-| `make sensor-test` | `sys-daemon-zig/src/test_sensors.zig` | n/a |
+| `make sensor-test` | `hal/src/test_sensors.zig` | n/a |
 
 **Изменения архитектуры:**
 - `bsdos-core` — добавлен `src/protocol.rs` (helpers: `parse_size_request`,

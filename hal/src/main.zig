@@ -1,5 +1,5 @@
 // START_AI_HEADER
-// MODULE: sys-daemon-zig/src/main.zig
+// MODULE: hal/src/main.zig
 // PURPOSE: bsdOS HAL — main entry point, owns the /var/run/bsdos-hal.sock command socket and dispatches text/binary SysCommand requests to per-subsystem Zig modules.
 // INTENT: All HAL commands live in one binary so the broker talks to a single AF_UNIX endpoint. Tickless by design — the main thread blocks in accept() and the kernel parks the ARM core via WFI. Subsystems (touch/sim/sms/gps/prox/charging/haptic/backlight) are imported for use by processTextCmd; their per-call functions run on the main thread (single-connection MVP, no thread pool yet).
 // DEPENDENCIES: std (heap, posix, fmt, time, debug), builtin (target os tag for freebsd vs linux-qemu fallback), libc via @cImport (sysctl, timeval, unistd, sys/stat), platform (comptime capability flags). Local modules: touch, zones, sim, sms, gps, prox, charging, haptic, backlight.

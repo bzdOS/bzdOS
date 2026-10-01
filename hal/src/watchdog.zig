@@ -1,5 +1,5 @@
 // START_AI_HEADER
-// MODULE: sys-daemon-zig/src/watchdog.zig
+// MODULE: hal/src/watchdog.zig
 // PURPOSE: FreeBSD /dev/watchdog heartbeat supervisor — keep the kernel watchdog fed every 10 s; if this HAL ever wedges, the kernel will NMI-reset the box.
 // INTENT: Pet cadence is 1/3 of the typical 30-second kernel timeout so a single missed pet is recoverable. The pet thread is a detached loop; close() writes the magic 'V' for a graceful disable.
 // DEPENDENCIES: std (posix.write, posix.close), libc via @cImport (fcntl, sys/time, sys/select for the timed sleep).

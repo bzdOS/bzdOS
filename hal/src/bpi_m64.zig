@@ -1,5 +1,5 @@
 // START_AI_HEADER
-// MODULE: sys-daemon-zig/src/bpi_m64.zig
+// MODULE: hal/src/bpi_m64.zig
 // PURPOSE: BPI-M64 hardware constants — Banana Pi BPI-M64 (Allwinner A64, FreeBSD 15.1 aarch64).
 // INTENT: Single source of truth for all board-level device paths and hardware parameters
 //         for the Chimp v0.2 target.  Imported by HAL subsystems that gate on

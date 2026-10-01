@@ -1,5 +1,5 @@
 // START_AI_HEADER
-// MODULE: sys-daemon-zig/src/cpu_stats.zig
+// MODULE: hal/src/cpu_stats.zig
 // PURPOSE: FreeBSD `kern.cp_time` CPU utilization sampler — two reads 100 ms apart, weighted deltas into per-bucket and total percent.
 // INTENT: Avoid the capnp crate on the HAL side; we shell out to `/sbin/sysctl -n kern.cp_time` twice and parse the five integer fields. A single static 4 KiB scratch buffer is reused across both reads so no per-call heap.
 // DEPENDENCIES: std (process, heap, fmt), libc via @cImport (sysctl, sys/types, unistd for usleep).

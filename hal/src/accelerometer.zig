@@ -1,5 +1,5 @@
 // START_AI_HEADER
-// MODULE: sys-daemon-zig/src/accelerometer.zig
+// MODULE: hal/src/accelerometer.zig
 // PURPOSE: ST LIS2DE12 (PinePhone) / MXC6655 3-axis accelerometer driver over /dev/iic1 with orientation detection (portrait/landscape/face-up/face-down).
 // INTENT: Hot-path read is 1 burst-read of 6 bytes, decodes raw int16 → g via the 2g full-scale constant, and flags raw_ok=false on any I2C failure (consumers fall back to getAccelStub). WHO_AM_I check on init confirms the chip is actually present.
 // DEPENDENCIES: std (debug, fmt), libc via @cImport (sys/types, sys/stat, fcntl, unistd, sys/ioctl).

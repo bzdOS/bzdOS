@@ -191,7 +191,7 @@ help:
 	@echo ""
 	@echo "  ZIG HAL"
 	@echo "    vm-setup-zig       — install Zig 0.15.2 in guest via pkg (FreeBSD bundles libc)"
-	@echo "    build-zig-in-guest — copy sys-daemon-zig/ + build natively in guest + deploy"
+	@echo "    build-zig-in-guest — copy hal/ + build natively in guest + deploy"
 	@echo "    build-zig-native   — build HAL on Linux host (test compilation only)"
 	@echo "    build-zig          — cross-compile on host (requires Zig master/0.15-dev)"
 	@echo "    run-zig-hal        — start HAL daemon in guest"

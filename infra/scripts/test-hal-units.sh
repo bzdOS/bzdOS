@@ -10,7 +10,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 if [ -f /etc/os-release ] && grep -q FreeBSD /etc/os-release; then
     # Running in guest
     echo "=== Running HAL unit tests (FreeBSD guest) ==="
-    cd "$PROJECT_ROOT/sys-daemon-zig"
+    cd "$PROJECT_ROOT/hal"
     zig build test 2>&1
     echo "=== HAL unit tests completed ==="
 else

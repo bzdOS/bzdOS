@@ -1,5 +1,5 @@
 // START_AI_HEADER
-// MODULE: sys-daemon-zig/src/sms.zig
+// MODULE: hal/src/sms.zig
 // PURPOSE: SMS send/list over the Quectel EG25-G AT interface (AT+CMGF=1, AT+CMGS, AT+CMGL) on the same /dev/cuaU0 UART the SIM driver uses.
 // INTENT: Stack-only, no allocator on hot paths. Reuse the AT_BUF_SIZE scratch across the 3 subcommands. Phase 1 covers send+list; read/delete and URC notifications are explicitly deferred.
 // DEPENDENCIES: std (mem, posix, fmt), libc via @cImport (termios, unistd, fcntl, sys/time, errno, string) — same set as sim.zig.

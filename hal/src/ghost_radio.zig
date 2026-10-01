@@ -1,5 +1,5 @@
 // START_AI_HEADER
-// MODULE: sys-daemon-zig/src/ghost_radio.zig
+// MODULE: hal/src/ghost_radio.zig
 // PURPOSE: "Ghost Radio" privacy mode — modem is powered off by default and only briefly enabled on a configurable interval to drain pending Matrix/IM pushes, then powered off again so the device drops off the air.
 // INTENT: Keep the whole loop in L1 instruction cache and on the stack (no allocator, no heap). GPIO toggles + nanosleeps are the only side effects. A single binary SyncPacket (cmd_id=5) is sent over the HAL socket during each window.
 // DEPENDENCIES: std (net, time, debug), libc via @cImport (time/nanosleep, fcntl, unistd, sys/ioctl for the gpioc ioctl).

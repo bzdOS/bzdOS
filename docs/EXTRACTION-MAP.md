@@ -22,7 +22,7 @@ git (HEAD a8f73f9).
 | Каталог монорепо | Репо в org | Кто источник истины |
 |---|---|---|
 | `bsdos-core`, `bsdos-pkgd`, `bsdos-run`, `lifecycled`, `jpk-manager`, `jpk-recipes`, `ipa-runtime/machotool`, wlstream | `bzdOS` — публичный **релизный снимок** v0.1.3 (3 коммита, 06-26 + README 08-21) | **монорепо**: `bsdos-core` (07-27) и `lifecycled` (07-23) ушли вперёд, в снимке этого нет |
-| `sys-daemon-zig` | `bsdos-hal` (06-26) | синхронно (монорепо 06-26) |
+| `sys-daemon-zig` | `bzdOS/hal/` (был `bsdos-hal`, влит 01.10) | синхронно (монорепо 06-26) |
 | `wayland-tunnel` | `WLTunnel` (06-26) | **монорепо** (07-11) |
 | `mac-companion/metal-viewer` | `metal-viewer` (06-26) | **монорепо** (07-27) |
 | wire-формат стрима (бывш. `wlstream/`) | `WLStream` (07-10) | **репо**: `bsdos-core` тянет его git-зависимостью (`bsdos-core/Cargo.toml:32`, rev 925b8f7); `wayland-tunnel` (Zig) wire-формат по спеке ещё не реализует (по памяти от 06-23, не перепроверено) |
@@ -90,7 +90,7 @@ git (HEAD a8f73f9).
 | `bzdOS` — **репо дистрибутива** | базовые сервисы и модель приложений (`bsdos-core`, `lifecycled`, `bsdos-pkgd`, `jpk-*`, `schema.capnp`) + сборка образа: `kernel/` ← `freebsd-patches/conf`, `infra/scripts` (bsdos-build, bpi-image, kernel, cross-cc, smoke), `infra/{machines.conf,pkgsets,rc.d,etc,etc-bsdOS,config,conf/devfs-rules.conf,u-boot,rust}`. Убраны: vendored `wlstream/`, deploy под конкретные хосты (`deploy-bsdos-myvm.sh`, `build-core.sh`, `hubd_mcp`), прод-IP | `5689441`, `24234d5` |
 | `WLTunnel` | `wayland-tunnel` (07-11) | `1741f54` |
 | `metal-viewer` | `metal-viewer` (07-27) + `mac-companion/wayland-client`; корень стал workspace | `6dbcd23` |
-| `bsdos-hal` | `sys-daemon-zig`; `gpu/` ← `hal/{gpu.zig,build.zig,mali_uio.*}`; `gpu/kmod/` ← `mali-uio/` | `6ad2ba0` |
+| `bsdos-hal` | `sys-daemon-zig`; `gpu/` ← `hal/{gpu.zig,build.zig,mali_uio.*}`; `gpu/kmod/` ← `mali-uio/` | влит в `bzdOS/hal/` (01.10, с историей) |
 | `ipa-runtime` (**новый**, видимость не решена) | `ipa-runtime/*` + `hal/darling-fbsd-overlay` + `bsdos-run`, `machotool` (из `bzdOS`) | `cafdfc2`, `b727b67` |
 | `attic` (**локальный, без remote**) | `proto`, `ui*`, приватность ×5, `telemetry-client`, `push-daemon`, `zfs-snapd`, `matrix-voice`, `cluster`, `couplingd`, `hubd-queue-repl` | `8b9c2a6` |
 

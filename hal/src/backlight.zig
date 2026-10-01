@@ -1,5 +1,5 @@
 // START_AI_HEADER
-// MODULE: sys-daemon-zig/src/backlight.zig
+// MODULE: hal/src/backlight.zig
 // PURPOSE: Backlight control via the FreeBSD backlight(9) ioctl interface on /dev/backlight/backlight0 with a hw.backlight sysctl fallback, plus a light-sensor stub for auto-brightness.
 // INTENT: Keep all paths (setLevel / getLevel / autoLevel / setPowerMode) allocation-free. Phase 1 = ioctl-only, Phase 2 = real APDS9960 /dev/iic0 light sensor, Phase 3 = power-mode integration.
 // DEPENDENCIES: std (debug, fmt), libc via @cImport (sys/types, sys/stat, fcntl, unistd, sys/ioctl, sys/sysctl).

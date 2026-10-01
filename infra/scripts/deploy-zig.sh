@@ -3,7 +3,7 @@ set -eu
 
 SCRIPT_DIR="$(dirname "$0")"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-BIN="$PROJECT_DIR/sys-daemon-zig/zig-out/bin/bsdos-hal"
+BIN="$PROJECT_DIR/hal/zig-out/bin/bsdos-hal"
 
 if [ ! -f "$BIN" ]; then
     echo "✗ No binary at $BIN"

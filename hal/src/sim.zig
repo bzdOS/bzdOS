@@ -1,5 +1,5 @@
 // START_AI_HEADER
-// MODULE: sys-daemon-zig/src/sim.zig
+// MODULE: hal/src/sim.zig
 // PURPOSE: SIM card status driver over the Quectel EG25-G modem on /dev/cuaU0 — 5 AT commands (CIMI, CPIN, CSQ, COPS, CREG) packed into a single SimInfo struct.
 // INTENT: Keep the AT I/O stack-only (no heap on the hot path); reuse a single AT_BUF_SIZE scratch across all 5 commands. Each parser is a separate small function so the dispatcher (getSimInfo) can swap or fall back per-field.
 // DEPENDENCIES: std (mem, posix, fmt), libc via @cImport (termios, unistd, fcntl, sys/time, errno, string).

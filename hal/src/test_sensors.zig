@@ -1,5 +1,5 @@
 // START_AI_HEADER
-// MODULE: sys-daemon-zig/src/test_sensors.zig
+// MODULE: hal/src/test_sensors.zig
 // PURPOSE: Unit tests for sensor register conversion functions (charging, magnetometer)
 // INTENT: Verify pure functions that convert raw register values to physical units
 // DEPENDENCIES: std (testing)

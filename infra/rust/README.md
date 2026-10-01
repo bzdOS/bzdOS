@@ -1,7 +1,7 @@
 # bsdOS Rust platform cfg infrastructure
 
 Compile-time platform selection for Rust crates, symmetric with the Zig side
-(`-Dplatform=<str>` → `sys-daemon-zig/src/platform.zig`). One source of truth:
+(`-Dplatform=<str>` → `hal/src/platform.zig`). One source of truth:
 the `BSDOS_PLATFORM` env var.
 
 We deliberately do **not** use cargo features for platform choice: features are

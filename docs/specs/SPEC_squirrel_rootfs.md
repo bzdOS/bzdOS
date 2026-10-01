@@ -200,7 +200,7 @@ cp target/aarch64-unknown-freebsd/release/bsdos_lifecycled $WORK/rootfs/opt/bsdo
 ### 5.5 Stage 4: Build Zig components (host cross-compile)
 
 ```sh
-cd $BSDOS/sys-daemon-zig
+cd $BSDOS/hal
 zig build -Dtarget=aarch64-freebsd.15.1 -Doptimize=ReleaseFast
 cp zig-out/bin/bsdos-hal $WORK/rootfs/opt/bsdos/bin/
 

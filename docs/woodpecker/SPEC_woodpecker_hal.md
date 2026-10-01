@@ -19,7 +19,7 @@
 
 ## 0. Scope
 
-The HAL is the **Zig daemon** (`sys-daemon-zig/`) that exposes hardware to oBzdOS jails. On Woodpecker, the HAL becomes the **system integration point** for:
+The HAL is the **Zig daemon** (`hal/`) that exposes hardware to oBzdOS jails. On Woodpecker, the HAL becomes the **system integration point** for:
 
 1. **HAL contract** (v1 → v2 evolution): JSON socket + Cap'n Proto stream + kqueue events
 2. **I2C drivers:** battery (AXP803), sensors (LIS3MDL, MXC6655, LIS2DE12)

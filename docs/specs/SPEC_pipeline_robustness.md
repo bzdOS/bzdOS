@@ -182,7 +182,7 @@ Each layer can break silently, producing a black viewer with no diagnostics.
 **Steps:**
 1. `deploy-bsdos-myvm.sh` already exists — update to:
    - Copy bsdos-core from `target/release/` (not Squirrel artefacts)
-   - Copy wayland-tunnel from `sys-daemon-zig/zig-out/bin/`
+   - Copy wayland-tunnel from `hal/zig-out/bin/`
    - Copy new rc.d script
    - Copy new bsdos-core.conf
    - `service bsdos_core restart`

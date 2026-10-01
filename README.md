@@ -53,7 +53,7 @@ The control plane uses a simple text protocol (`CMD ARG\n` / `+OK\n`) over virti
 | bsdos-run, machotool | Rust | IPA runner, Mach-O parser | [github.com/bzdOS/ipa-runtime](https://github.com/bzdOS/ipa-runtime) |
 | zenoh-freebsd | Rust | FreeBSD-patched Zenoh + obfs link | [github.com/bzdOS/zenoh-freebsd](https://github.com/bzdOS/zenoh-freebsd) |
 | WLTunnel | Zig | Wayland session streaming tunnel | [github.com/bzdOS/WLTunnel](https://github.com/bzdOS/WLTunnel) |
-| bsdos-hal | Zig | Hardware abstraction layer (aarch64) | [github.com/bzdOS/bsdos-hal](https://github.com/bzdOS/bsdos-hal) |
+| bsdos-hal | Zig | Hardware abstraction layer (aarch64) | [`hal/`](hal/) (this repo) |
 | metal-viewer | Rust | macOS Metal stream viewer | [github.com/bzdOS/metal-viewer](https://github.com/bzdOS/metal-viewer) |
 | WLStream | Rust | Wayland stream wire format | [github.com/bzdOS/WLStream](https://github.com/bzdOS/WLStream) |
 

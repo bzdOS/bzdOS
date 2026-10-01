@@ -1,5 +1,5 @@
 // START_AI_HEADER
-// MODULE: sys-daemon-zig/src/proximity.zig
+// MODULE: hal/src/proximity.zig
 // PURPOSE: STK3311 / BTTF1811 proximity + ambient-light sensor driver over /dev/iic0 (PinePhone). Returns near/far and a rough lux estimate.
 // INTENT: Minimal I2C traffic per call (1 + 1 + 1 single-byte reads with retry); threshold-based near/far (PSDATA < 50) and 0.6 lux/LSB scaling — documented as "rough approximation, real calibration needs optical parameters".
 // DEPENDENCIES: std (debug, fmt), libc via @cImport (sys/types, sys/stat, fcntl, unistd, sys/ioctl).

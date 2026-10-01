@@ -1,5 +1,5 @@
 // START_AI_HEADER
-// MODULE: sys-daemon-zig/src/modem.zig
+// MODULE: hal/src/modem.zig
 // PURPOSE: Общие операции модема (open/close/sendAt) для sim.zig и sms.zig
 // INTENT: Устранить дублирование modem операций между sim.zig и sms.zig
 // DEPENDENCIES: libc (termios, unistd, fcntl, sys/time, errno, string)

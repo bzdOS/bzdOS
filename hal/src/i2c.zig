@@ -1,5 +1,5 @@
 // START_AI_HEADER
-// MODULE: sys-daemon-zig/src/i2c.zig
+// MODULE: hal/src/i2c.zig
 // PURPOSE: Общие I2C операции для всех сенсоров (open/read/write/burst)
 // INTENT: Устранить дублирование i2cRead/i2cWrite/i2cReadBurst в accelerometer/proximity/magnetometer/charging;
 //         централизовать выбор шины — путь /dev/iicN берётся из platform.i2c_sensor_bus,

@@ -1,5 +1,5 @@
 // START_AI_HEADER
-// MODULE: sys-daemon-zig/src/touch_zones.zig
+// MODULE: hal/src/touch_zones.zig
 // PURPOSE: Compile-time-constant touch-zone lookup for the 720×1440 PinePhone layout — given (x, y) returns the owning jail name (appA/appB) or null for the status bar / dock / dead zones.
 // INTENT: Zero allocations, O(N) with N=2 at compile time (inline for-loop unrolls). Touched only by main.zig's get_touch_zone command and predictive_touch (which uses detectZoneForEvent with a pressure filter). Compile-time asserts verify the layout is sane.
 // DEPENDENCIES: std (mem.eql for the comptime tests).

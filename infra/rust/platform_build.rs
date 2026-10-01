@@ -1,7 +1,7 @@
 // START_AI_HEADER
 // MODULE: infra/rust/platform_build.rs
 // PURPOSE: Reusable build-script helper that translates the BSDOS_PLATFORM env var
-//          into cargo rustc-cfg flags, mirroring sys-daemon-zig/src/platform.zig.
+//          into cargo rustc-cfg flags, mirroring hal/src/platform.zig.
 // INTENT: Single source of truth for compile-time platform selection on the Rust
 //         side. Crates include!() this file from their build.rs and call
 //         emit_platform_cfg(). Selection is mutually-exclusive (one platform),
@@ -15,7 +15,7 @@
 //   purpose: Emit cargo cfg flags from the BSDOS_PLATFORM env var so downstream
 //            code can gate on `#[cfg(bsdos_platform = "...")]` and per-capability
 //            cfgs (e.g. `#[cfg(bsdos_has_i2c)]`). The capability set mirrors the
-//            comptime `has_*` constants in sys-daemon-zig/src/platform.zig exactly.
+//            comptime `has_*` constants in hal/src/platform.zig exactly.
 //   input:   BSDOS_PLATFORM env var (one of: qemu_amd64, qemu_aarch64, bpi_m64,
 //            pinephone). Defaults to "qemu_amd64" when unset; an unrecognised
 //            value falls back to qemu_aarch64 (matching platform.zig `current`).
@@ -51,7 +51,7 @@ pub fn emit_platform_cfg() {
     );
     println!("cargo::rustc-cfg=bsdos_platform=\"{platform}\"");
 
-    // ── Capability flags — kept 1:1 with sys-daemon-zig/src/platform.zig `has_*` ──
+    // ── Capability flags — kept 1:1 with hal/src/platform.zig `has_*` ──
     // Phone-only (PinePhone).
     let is_phone = platform == "pinephone";
     // Real hardware = anything that is not a QEMU guest (BPI-M64 + PinePhone).

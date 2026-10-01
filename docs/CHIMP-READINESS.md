@@ -64,7 +64,7 @@ Detailed analysis + per-milestone validation in [`docs/BPI-M64-BOOT.md`](BPI-M64
 
 ---
 
-## 4. HAL (sys-daemon-zig)
+## 4. HAL (hal/)
 
 | Item | Status | Notes |
 |---|---|---|
@@ -149,6 +149,6 @@ Hang M3–M5 → layout/DTB/root-device → revisit BPI-M64-BOOT §4 / §6.
 *Related:* [`docs/BPI-M64-BOOT.md`](BPI-M64-BOOT.md) (boot chain + validation),
 `infra/scripts/bpi-image.sh` (SD image recipe), `infra/machines.conf` (machine table),
 `infra/pkgsets/bpi-headless.txt` (first-boot pkg set),
-`sys-daemon-zig/src/platform.zig` + `bpi_m64.zig` (HAL platform flags + board constants),
+`hal/src/platform.zig` + `bpi_m64.zig` (HAL platform flags + board constants),
 `docs/specs/SPEC_chimp_release.md` (release plan), `docs/v0.2-release-plan.md`,
 [`ROADMAP.md`](../ROADMAP.md) (Chimp v0.2 section), [`PLAN-gpu-bringup.md`](../PLAN-gpu-bringup.md) (display phasing).

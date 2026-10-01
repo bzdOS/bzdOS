@@ -1,5 +1,5 @@
 // START_AI_HEADER
-// MODULE: sys-daemon-zig/src/gps.zig
+// MODULE: hal/src/gps.zig
 // PURPOSE: NMEA 0183 GPS parser for the Quectel L96 on /dev/ttyu1 — RMC (position + fix validity) and GGA (accuracy, satellites, HDOP) sentence parsers, plus a 64-byte cache-line GpsData output struct.
 // INTENT: Phase 1: parser + QEMU stub. Phase 2 will open /dev/ttyu1 @ 9600 baud and read NMEA lines into these parsers. Phase 3 will check jail permission before returning. No allocator, no heap — GpsData is one cache line.
 // DEPENDENCIES: std (fmt, mem, debug), builtin (target os).

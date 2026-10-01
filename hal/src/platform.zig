@@ -1,5 +1,5 @@
 // START_AI_HEADER
-// MODULE: sys-daemon-zig/src/platform.zig
+// MODULE: hal/src/platform.zig
 // PURPOSE: Compile-time platform detection and capability flags for bsdOS HAL.
 //          Resolves -Dplatform=<str> from build.zig into typed enum + bool constants.
 // INTENT: All platform-specific feature guards reference these pub const booleans.

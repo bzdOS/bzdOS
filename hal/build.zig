@@ -1,5 +1,5 @@
 // START_AI_HEADER
-// MODULE: sys-daemon-zig/build.zig
+// MODULE: hal/build.zig
 // PURPOSE: Zig build definition for sys-daemon-zig — FreeBSD daemon binary.
 // INTENT: Standard Zig build.zig with libc linkage for FreeBSD syscalls.
 //         Supports -Dplatform=<str> for comptime platform capability flags.

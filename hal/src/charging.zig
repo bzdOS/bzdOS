@@ -1,5 +1,5 @@
 // START_AI_HEADER
-// MODULE: sys-daemon-zig/src/charging.zig
+// MODULE: hal/src/charging.zig
 // PURPOSE: AXP803 PMIC charging-status driver over /dev/iic0 — read charging flag + current (mA) + voltage (mV) and write the charging-current limit register.
 // INTENT: Stack-only, no heap, retries per I2C transaction; falls back to a fixed "active charging" stub when /dev/iic0 is missing (QEMU / no PMIC).
 // DEPENDENCIES: std (debug, fmt), libc via @cImport (sys/types, sys/stat, fcntl, unistd, sys/ioctl).

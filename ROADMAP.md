@@ -125,7 +125,7 @@ aarch64) — headless first boot, доказывающий «board + transport»
 - ✅ **Cross-compile** aarch64: `make cross-squirrel-aarch64` — Rust (`bsdos-core` + `bsdos-lifecycled`) + Zig (`bsdos-hal` + `wayland-tunnel` + `bsdos-agent`)
 - ✅ **Machine abstraction**: `infra/machines.conf` → `bpi-m64` (arch=aarch64, kernconf=GENERIC, platform=bpi_m64, pkgset=bpi-headless)
 - ✅ **pkgset** `infra/pkgsets/bpi-headless.txt` — минимальный headless first-boot набор (zenoh + liblz4 + pcre2; GUI исключён намеренно)
-- ✅ **HAL platform-флаги**: `sys-daemon-zig/src/platform.zig` (`-Dplatform=bpi_m64`) + board-константы `bpi_m64.zig` (A64, 4 ядра, iic0..2, awg0, dsp0); phone-only caps comptime-false
+- ✅ **HAL platform-флаги**: `hal/src/platform.zig` (`-Dplatform=bpi_m64`) + board-константы `bpi_m64.zig` (A64, 4 ядра, iic0..2, awg0, dsp0); phone-only caps comptime-false
 - ✅ **rc.d autostart**: headless-набор `bsdos_core` + `bsdos_lifecycled` (скрипты есть; GUI-pipeline отключён)
 - ✅ **SD-image recipe** `infra/scripts/bpi-image.sh` — sunxi U-Boot@8KiB + GPT + UFS layout (написан, см. ниже)
 

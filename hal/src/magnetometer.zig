@@ -1,5 +1,5 @@
 // START_AI_HEADER
-// MODULE: sys-daemon-zig/src/magnetometer.zig
+// MODULE: hal/src/magnetometer.zig
 // PURPOSE: LIS3MDL magnetometer driver over /dev/iic1 (PinePhone) — reads X/Y/Z in µT and converts to a 0..360° compass heading via atan2.
 // INTENT: Burst-read 6 bytes, scale by ±4 gauss constant (1 LSB ≈ 0.0122 µT), heading = atan2(y, x) → 0..360. WHO_AM_I check on init confirms the chip. Stub on any I2C failure.
 // DEPENDENCIES: std (math.atan2, fmt, debug), libc via @cImport (sys/types, sys/stat, fcntl, unistd, sys/ioctl, math.h).

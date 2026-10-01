@@ -11,7 +11,7 @@
 | Repo | What its docs cover |
 |---|---|
 | [bzdOS](https://github.com/bzdOS/bzdOS) | the distribution: image build, base services, jailed-app model, `docs/specs/` (Squirrel rootfs, 2-stream, .jpk, Chimp release/security/networking/zenoh, net v1, Zenoh keyspace/security), BPI-M64 boot chain, bsdos-core ↔ WLTunnel deploy contract |
-| [bsdos-hal](https://github.com/bzdOS/bsdos-hal) | HAL daemon, GPU backend; `docs/SPEC_chimp_hal.md` (EL2 owns the hardware) |
+| [hal/](hal/) | HAL daemon, GPU backend; `docs/SPEC_chimp_hal.md` (EL2 owns the hardware) (was the bsdos-hal repo, merged 2026-10-01) |
 | [bzdk](https://github.com/bzdOS/bzdk) | the EL2 hypervisor on BPI-M64 |
 | [lima-freebsd](https://github.com/bzdOS/lima-freebsd) | Mali-400 DRM driver |
 | [WLTunnel](https://github.com/bzdOS/WLTunnel), [WLStream](https://github.com/bzdOS/WLStream), [metal-viewer](https://github.com/bzdOS/metal-viewer) | Wayland streaming: tunnel, wire format, macOS viewer |

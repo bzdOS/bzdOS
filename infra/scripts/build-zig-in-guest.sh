@@ -11,14 +11,14 @@ ssh_root "mkdir -p /opt/sys-daemon-zig && chown freebsd /opt/sys-daemon-zig"
 echo "Syncing sys-daemon-zig sources to guest..."
 scp -P "$VM_SSH_PORT" -i "$SSH_KEY" \
     -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-    -r "$PROJECT/sys-daemon-zig/src" \
-       "$PROJECT/sys-daemon-zig/build.zig" \
-       "$PROJECT/sys-daemon-zig/build.zig.zon" \
+    -r "$PROJECT/hal/src" \
+       "$PROJECT/hal/build.zig" \
+       "$PROJECT/hal/build.zig.zon" \
     freebsd@localhost:/opt/sys-daemon-zig/ 2>/dev/null || \
 scp -P "$VM_SSH_PORT" -i "$SSH_KEY" \
     -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-    -r "$PROJECT/sys-daemon-zig/src" \
-       "$PROJECT/sys-daemon-zig/build.zig" \
+    -r "$PROJECT/hal/src" \
+       "$PROJECT/hal/build.zig" \
     freebsd@localhost:/opt/sys-daemon-zig/
 
 echo "Building bsdos-hal in guest (Zig 0.15.2 native)..."

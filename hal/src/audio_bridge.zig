@@ -1,5 +1,5 @@
 // START_AI_HEADER
-// MODULE: sys-daemon-zig/src/audio_bridge.zig
+// MODULE: hal/src/audio_bridge.zig
 // PURPOSE: Zero-copy Cap'n Proto AudioPacket reader that streams telephony audio from /var/run/bsdos-audio.sock to /dev/dsp (OSS FreeBSD) — pointer-arithmetic slice into a static 4 KiB buffer, no intermediate copies.
 // INTENT: L2-cache-friendly pipeline (4096 B static recv_buf fits Cortex-A53 L2). The CapnpError / OssError types and the AudioPacketView let relay callers skip per-field decoding. Falls back to a no-dsp mode when /dev/dsp is missing (QEMU) so the socket path can still be tested.
 // DEPENDENCIES: std (net, fmt, debug), libc via @cImport (sys/stat, sys/soundcard, sys/ioctl, fcntl, unistd).

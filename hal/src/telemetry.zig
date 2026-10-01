@@ -1,5 +1,5 @@
 // START_AI_HEADER
-// MODULE: sys-daemon-zig/src/telemetry.zig
+// MODULE: hal/src/telemetry.zig
 // PURPOSE: HAL-side HardwareStatus producer — reads uptime/battery/cpu and pushes the 32-byte Cap'n Proto message to a Unix-socket consumer (bsdos-core).
 // INTENT: Mirror the Rust bsdos-core/src/capnp.rs wire format (32 bytes, hand-rolled) on the Zig side; keep the encode hot path allocation-free by writing directly into a stack-typed [32]u8 buffer.
 // DEPENDENCIES: std (mem, time, debug, net, process), builtin (target os), libc via @cImport (sysctl, timeval, unistd).

@@ -1,5 +1,5 @@
 // START_AI_HEADER
-// MODULE: sys-daemon-zig/src/predictive_touch.zig
+// MODULE: hal/src/predictive_touch.zig
 // PURPOSE: Predictive touch — 64-byte cache-line TouchEvent ring buffer + integer-only weighted-least-squares extrapolation that fires a CMD_PRE_THAW (id=4) packet to lifecycled ~75ms before the finger lands on an icon.
 // INTENT: Whole module must fit in L1 instruction cache (no float, no allocator, no heap). BSS ring + atomic-free head/count. Only fires on hover/move (press/lift are post-commit and don't need prewarming). The whole 5-point ring + 4-byte packet is what we send across /var/run/bsdos-lifecycle.sock.
 // DEPENDENCIES: std (time, math, net, debug).

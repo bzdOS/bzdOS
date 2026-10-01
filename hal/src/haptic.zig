@@ -1,5 +1,5 @@
 // START_AI_HEADER
-// MODULE: sys-daemon-zig/src/haptic.zig
+// MODULE: hal/src/haptic.zig
 // PURPOSE: Haptic feedback (vibration motor) on the SGM3602 LRA — currently a debug-print stub; Phase 2 will drive GPIO/PWM via /dev/gpioc0 ioctl.
 // INTENT: Define the HapticPattern enum up-front so callers and the stub agree; the Phase 1 stub still goes through playPattern/parsePattern so the wire path is exercised end-to-end.
 // DEPENDENCIES: std (fmt, mem, debug).
