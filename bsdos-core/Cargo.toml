@@ -29,8 +29,9 @@ futures           = { workspace = true, optional = true }
 capnp             = "0.19"
 serde             = { version = "1", features = ["derive"] }
 toml              = "0.8"
-wlstream          = { path = "../wlstream" }
+wlstream          = { git = "https://github.com/bzdOS/wlstream", rev = "925b8f7" }
 thiserror         = { workspace = true }
+libc              = { workspace = true }
 
 [build-dependencies]
 capnpc = "0.19"

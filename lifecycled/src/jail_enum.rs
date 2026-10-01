@@ -131,6 +131,61 @@ mod imp {
     }
     // jid_by_name:end
 
+    /// Resolve a jail name to its kernel-reported root path via jail_get(2).
+    ///
+    /// DELIBERATELY the only way callers (main.rs's DEVFS_MOUNT handler) may
+    /// learn a jail's host filesystem path: the path comes from the KERNEL's
+    /// own jail table, never from a caller-supplied string over the Unix
+    /// socket. This is the security property the devfs-ruleset4 provisioning
+    /// verb depends on — see main.rs's mount_devfs_ruleset4 for why.
+    // path_by_name:start
+    //   purpose: Resolve a jail name to its kernel-reported filesystem root
+    //            path via a direct jail_get(2) syscall (the "path" parameter).
+    //   input:  name — jail name string
+    //   output: Result<String, String> (absolute host path on success, error
+    //           description on failure)
+    //   sideEffects: calls jail_get(2)
+    pub fn path_by_name(name: &str) -> Result<String, String> {
+        let name_cstr = CString::new(name).map_err(|e| format!("jail name nul: {e}"))?;
+        let key_name = CString::new("name").map_err(|e| e.to_string())?;
+        let key_path = CString::new("path").map_err(|e| e.to_string())?;
+
+        // MAXPATHLEN on FreeBSD is 1024; the kernel NUL-terminates within
+        // this buffer. jail_get(2) writes into it in place (it is BOTH the
+        // input capacity and the output buffer for a string-valued param).
+        const MAXPATHLEN: usize = 1024;
+        let mut path_buf = vec![0u8; MAXPATHLEN];
+
+        let mut iov = [
+            libc::iovec {
+                iov_base: key_name.as_ptr() as *mut _,
+                iov_len: key_name.as_bytes_with_nul().len(),
+            },
+            libc::iovec {
+                iov_base: name_cstr.as_ptr() as *mut _,
+                iov_len: name_cstr.as_bytes_with_nul().len(),
+            },
+            libc::iovec {
+                iov_base: key_path.as_ptr() as *mut _,
+                iov_len: key_path.as_bytes_with_nul().len(),
+            },
+            libc::iovec {
+                iov_base: path_buf.as_mut_ptr() as *mut _,
+                iov_len: path_buf.len(),
+            },
+        ];
+
+        let ret = unsafe { libc::jail_get(iov.as_mut_ptr(), iov.len() as u32, 0) };
+        if ret < 0 {
+            return Err(format!("jail_get({name}, path): errno={}", errno()));
+        }
+
+        let nul_pos = path_buf.iter().position(|&b| b == 0).unwrap_or(path_buf.len());
+        String::from_utf8(path_buf[..nul_pos].to_vec())
+            .map_err(|e| format!("jail path for {name} is not valid UTF-8: {e}"))
+    }
+    // path_by_name:end
+
     /// Enumerate all active jails by walking the kernel jail table with the
     /// "lastjid" key — the canonical jail_get(2) iteration idiom.
     // list_jails:start
@@ -334,6 +389,16 @@ mod imp {
     }
     // jid_by_name:end
 
+    // path_by_name:start
+    //   purpose: Stub — jail path lookup is unavailable off FreeBSD.
+    //   input:  _name — ignored
+    //   output: Err(unsupported)
+    //   sideEffects: none
+    pub fn path_by_name(_name: &str) -> Result<String, String> {
+        Err(UNSUPPORTED.to_string())
+    }
+    // path_by_name:end
+
     // list_jails:start
     //   purpose: Stub — returns an empty jail list off FreeBSD so the crate builds.
     //   input:  none
@@ -367,7 +432,7 @@ mod imp {
 
 // ── Public re-exports (platform-neutral surface) ─────────────────────────────
 
-pub use imp::{jail_pids, jid_by_name, list_jails, signal_jail_pids};
+pub use imp::{jail_pids, jid_by_name, list_jails, path_by_name, signal_jail_pids};
 
 #[cfg(test)]
 mod tests {
@@ -403,6 +468,7 @@ mod tests {
         assert_eq!(list_jails().expect("stub list ok"), Vec::<JailInfo>::new());
         assert_eq!(jail_pids(1).expect("stub pids ok"), Vec::<i32>::new());
         assert!(jid_by_name("appBrowser").is_err());
+        assert!(path_by_name("appBrowser").is_err());
         assert!(signal_jail_pids("appBrowser", Sig::Stop).is_err());
     }
 }

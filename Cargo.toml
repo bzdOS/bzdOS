@@ -1,29 +1,14 @@
 [workspace]
 resolver = "2"
 members = [
-    "proto/broker",
-    "proto/app",
-    "proto/contacts",
-    "proto/calendar",
-    "proto/clipper",
     "bsdos-core",
     "bsdos-core/tests/zenoh-peer",
     "bsdos-core/tests/integration",
     "bsdos-pkgd",
-    "zfs-snapd",
-    "matrix-voice",
-    "telemetry-client",
+    "bsdos-run",
     "lifecycled",
     "jpk-manager",
-    "push-daemon",
-    "ui-backend-rust",
-    "mac-companion/metal-viewer",
-    "mac-companion/wayland-client",
-    "mac-companion/zenoh-link-obfs",
-    "mac-companion/zenoh-link-patched",
-    "wlstream",
-    "bsdos-run",
-    "ipa-runtime/machotool",
+    "machotool",
 ]
 
 # Shared dependencies pinned here for workspace consistency
@@ -43,17 +28,9 @@ thiserror   = "1"
 version = "0.1.0"
 edition = "2021"
 
-# FreeBSD: add set_bind_to_device stubs
-# DPI bypass: ALPN h2/http1.1 on TLS links + AEAD obfs link (zenoh-link-obfs)
+# FreeBSD fixes + the obfs link live in https://github.com/bzdOS/zenoh-freebsd
 [patch.crates-io]
-zenoh-util = { path = "./zenoh-util-freebsd" }
-zenoh-link-commons = { path = "./mac-companion/zenoh-link-commons-patched" }
-zenoh-link-tls = { path = "./mac-companion/zenoh-link-tls-patched" }
-# bsdOS: patch the closed zenoh-link dispatcher to add Obfs arm to LinkKind enum,
-# new_supported_links, TryFrom<&Locator>, ALL_SUPPORTED_LINKS, LocatorInspector
-# is_reliable/is_multicast, and LinkManagerBuilderUnicast::make.
-# zenoh-link EXISTS on crates.io (v1.9.0), so [patch.crates-io] is valid here.
-zenoh-link = { path = "./mac-companion/zenoh-link-patched" }
-# NOTE: zenoh-link-obfs is NOT patchable via [patch.crates-io] (not on crates.io).
-# It is wired as a workspace member and path dep inside zenoh-link-patched/Cargo.toml.
-
+zenoh-util         = { git = "https://github.com/bzdOS/zenoh-freebsd" }
+zenoh-link-commons = { git = "https://github.com/bzdOS/zenoh-freebsd" }
+zenoh-link-tls     = { git = "https://github.com/bzdOS/zenoh-freebsd" }
+zenoh-link         = { git = "https://github.com/bzdOS/zenoh-freebsd" }

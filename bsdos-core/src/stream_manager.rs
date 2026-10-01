@@ -13,6 +13,8 @@
 // END_AI_HEADER
 
 use std::collections::HashMap;
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+use std::os::unix::io::{FromRawFd, IntoRawFd};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
@@ -78,6 +80,10 @@ pub struct StreamInstance {
     pub app_id: String,
     pub cfg: StreamConfig,
     pub cage: std::process::Child,
+    /// FIFO write-end: kept open so cage -s stdin stays live.
+    /// Drop to send EOF to cage, triggering a graceful exit (no SIGKILL needed
+    /// for the compositor). Replaces the wl-keepalive Wayland client shim.
+    _cage_stdin_fifo: std::fs::File,
     pub tunnel: std::process::Child,
     pub app: std::process::Child,
     pub rundir: PathBuf,
@@ -179,6 +185,7 @@ impl StreamManager {
             app_id: app_id.clone(),
             cfg: cfg.clone(),
             cage: procs.cage,
+            _cage_stdin_fifo: procs._cage_stdin_fifo,
             tunnel: procs.tunnel,
             app: procs.app,
             rundir,
@@ -197,9 +204,13 @@ impl StreamManager {
     // END_SM_START
 
     // START_SM_STOP
-    //   purpose: Kill all processes for a stream and clean up
+    //   purpose: Kill all processes for a stream and clean up.
     //   input: app_id
-    //   sideEffects: SIGKILL + reap all children, abort forwarder, rm rundir
+    //   sideEffects: Drops _cage_stdin_fifo → cage reads EOF → exits cleanly.
+    //     SIGKILL remaining processes (tunnel, app) + reap, abort forwarder tasks,
+    //     rm rundir.  When WLSTREAM_JAIL=1: additionally destroys the jail via
+    //     `jail -r stream-<app_id>`, killing any stragglers by kernel enforcement
+    //     (no orphan possible by construction).
     pub async fn stop_stream(&self, app_id: &str) -> Result<(), StreamError> {
         let mut instance = {
             let mut streams = self.streams.lock().await;
@@ -209,7 +220,14 @@ impl StreamManager {
 
         eprintln!("[sm] stopping stream: {}", app_id);
 
-        // SIGKILL all processes (std::process::Child API)
+        // Close cage's stdin FIFO write-end first: cage -s reads EOF and exits cleanly.
+        // This avoids SIGKILL to the compositor (which can leave sockets dangling).
+        drop(instance._cage_stdin_fifo);
+
+        // Wait briefly for cage to exit gracefully before SIGKILL fallback.
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        // SIGKILL remaining processes (tunnel, app; cage may already be gone).
         let _ = instance.cage.kill();
         let _ = instance.tunnel.kill();
         let _ = instance.app.kill();
@@ -226,12 +244,22 @@ impl StreamManager {
         let _ = instance.tunnel.wait();
         let _ = instance.app.wait();
 
+        // WLSTREAM_JAIL=1: destroy the jail — kills any surviving descendants
+        // by kernel enforcement (no further orphan accumulation possible).
+        if std::env::var("WLSTREAM_JAIL").as_deref() == Ok("1") {
+            let jail_name = format!("stream-{}", app_id);
+            eprintln!("[sm] {} destroying jail {}", app_id, jail_name);
+            let _ = std::process::Command::new("/usr/sbin/jail")
+                .args(["-r", &jail_name])
+                .status();
+        }
+
         // Abort tasks
         instance.forwarder_handle.abort();
         instance.input_handle.abort();
         instance.resize_handle.abort();
 
-        // Cleanup rundir
+        // Cleanup rundir (including FIFO file)
         let _ = std::fs::remove_dir_all(&instance.rundir);
 
         eprintln!("[sm] stream {} stopped", app_id);
@@ -360,6 +388,9 @@ impl StreamManager {
 #[cfg(feature = "with-bridge")]
 struct SpawnedProcesses {
     cage: std::process::Child,
+    /// FIFO write-end kept open so cage -s stdin stays live (cage exits on EOF).
+    /// Dropping this field closes the pipe and terminates cage.
+    _cage_stdin_fifo: std::fs::File,
     tunnel: std::process::Child,
     app: std::process::Child,
     cage_pid: u32,
@@ -367,6 +398,15 @@ struct SpawnedProcesses {
     app_pid: u32,
 }
 
+// spawn_processes:start
+//   purpose: Spawn cage (headless compositor, shell-mode) + wayland-tunnel + app per stream.
+//   input:  StreamConfig, rundir path.
+//   output: Ok(SpawnedProcesses) or Err(StreamError) with typed diagnostic.
+//   sideEffects: creates rundir, named FIFO, spawns 3 processes.
+//   note: cage is launched with `-s` (shell mode) so it stays alive with 0 clients
+//         without any wl-keepalive shim.  The FIFO write-end in SpawnedProcesses keeps
+//         cage's stdin open; dropping SpawnedProcesses sends EOF → cage exits cleanly.
+//         Set env WLSTREAM_JAIL=1 to enable jail-per-stream mode (see spawn_cage_in_jail).
 #[cfg(feature = "with-bridge")]
 async fn spawn_processes(cfg: &StreamConfig, rundir: &std::path::Path) -> Result<SpawnedProcesses, StreamError> {
     let app_id = &cfg.app_id;
@@ -374,25 +414,121 @@ async fn spawn_processes(cfg: &StreamConfig, rundir: &std::path::Path) -> Result
     // Create isolated rundir
     std::fs::create_dir_all(rundir)
         .map_err(|e| StreamError::SpawnFailed(format!("mkdir {}: {}", rundir.display(), e)))?;
-    std::fs::set_permissions(rundir, std::os::unix::fs::PermissionsExt::from_mode(0o777))
+    std::fs::set_permissions(rundir, PermissionsExt::from_mode(0o777))
         .map_err(|e| StreamError::SpawnFailed(format!("chmod {}: {}", rundir.display(), e)))?;
 
+    // Whether to wrap cage+tunnel+app in a FreeBSD jail (WLSTREAM_JAIL=1, #147).
+    // All three processes land in the SAME jail (created empty here, populated via
+    // jexec_command below) so `jail -r stream-<app_id>` kills the whole tree by kernel
+    // enforcement — no orphan possible by construction, regardless of double-forking
+    // (e.g. chrome) or any other reparenting trick that could defeat SIGKILL-by-pid.
+    let use_jail = std::env::var("WLSTREAM_JAIL").as_deref() == Ok("1");
+    let jail_name: Option<String> = if use_jail {
+        create_stream_jail(app_id)?;
+        Some(format!("stream-{}", app_id))
+    } else {
+        None
+    };
+    let rundir_str = rundir.to_str().unwrap_or("/tmp/bsdos/streams/unknown");
+
     // 1. Spawn cage
-    eprintln!("[sm] {} spawning cage…", app_id);
-    let mut cage = Command::new("/usr/local/bin/cage")
-        .env("XDG_RUNTIME_DIR", rundir)
-        .env("WLR_BACKENDS", "headless")
-        .env("WLR_RENDERER", "pixman")
-        .env("WLR_HEADLESS_OUTPUTS", "1")
-        .env("LIBSEAT_BACKEND", "noop")
-        .arg("--")
-        .arg("/usr/local/bin/wl-keepalive")
+    //
+    // WHY cage -s (shell mode) instead of `cage -- wl-keepalive`:
+    //   cage is a kiosk compositor that exits when its managed app exits.
+    //   wl-keepalive was a shim Wayland client that connected and slept
+    //   forever to prevent cage from exiting with 0 clients.  It leaked
+    //   6 644 orphan processes on dev-VM (2026-07-03) despite the getppid()
+    //   guard added in commit bdc6f3d, because cage --(wl-keepalive) is a
+    //   fragile parent-child coupling that races on cage restart.
+    //
+    //   cage -s (shell mode) solves this at the compositor level:
+    //   in shell mode, cage does NOT terminate when all windows close —
+    //   it keeps the Wayland compositor running and waits for the next
+    //   app-launch command on stdin.  A named FIFO keeps stdin open with
+    //   0 bytes, so cage never reads an EOF and never exits spuriously.
+    //   Teardown: dropping SpawnedProcesses drops _cage_stdin_fifo → FIFO
+    //   write-end closes → cage reads EOF → cage exits cleanly (no SIGKILL
+    //   needed for the compositor itself).
+    //
+    //   Result: wl-keepalive is eliminated from the spawn path entirely.
+    //   The binary remains in the build for the bsdos-pipeline sh script
+    //   (which is legacy and will be replaced by StreamManager jail mode).
+    eprintln!("[sm] {} spawning cage (shell-mode, no keepalive)…", app_id);
+
+    // Named FIFO for cage's stdin — keeps it alive without any app client.
+    let fifo_path = rundir.join("cage-stdin.fifo");
+    // Remove stale FIFO if present from a previous (crashed) run.
+    let _ = std::fs::remove_file(&fifo_path);
+    unsafe {
+        let path_cstr = std::ffi::CString::new(fifo_path.to_str().unwrap_or(""))
+            .map_err(|e| StreamError::SpawnFailed(format!("fifo path CString: {}", e)))?;
+        if libc::mkfifo(path_cstr.as_ptr(), 0o600) != 0 {
+            return Err(StreamError::SpawnFailed(format!(
+                "mkfifo {}: {}",
+                fifo_path.display(),
+                std::io::Error::last_os_error()
+            )));
+        }
+    }
+
+    // Open the write-end O_RDWR. O_WRONLY|O_NONBLOCK would FAIL with ENXIO (POSIX: no reader
+    // open yet), and O_WRONLY blocking would deadlock (the reader opens only afterwards).
+    // O_RDWR never blocks and holds the write side open, so cage's stdin (the read-end) sees
+    // EOF only once we drop this handle on stop → clean shutdown without a client shim.
+    let fifo_write = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&fifo_path)
+        .map_err(|e| StreamError::SpawnFailed(format!("open fifo write-end (O_RDWR): {}", e)))?;
+    // Open read-end (will be cage's stdin).
+    let fifo_read_raw = std::fs::File::open(&fifo_path)
+        .map_err(|e| StreamError::SpawnFailed(format!("open fifo read-end: {}", e)))?;
+
+    let mut cage_cmd = if let Some(jail) = jail_name.as_deref() {
+        // jail-per-stream mode (#147): cage runs inside the per-stream jail via jexec,
+        // same env vars as bare mode, explicit through /usr/bin/env (see jexec_command).
+        jexec_command(
+            jail, None,
+            &[
+                ("XDG_RUNTIME_DIR", rundir_str),
+                ("WLR_BACKENDS", "headless"),
+                ("WLR_RENDERER", "pixman"),
+                ("WLR_HEADLESS_OUTPUTS", "1"),
+                ("LIBSEAT_BACKEND", "noop"),
+            ],
+            "/usr/local/bin/cage", &["-s"],
+        )
+    } else {
+        // bare-process mode (default, production-safe).
+        let mut cmd = Command::new("/usr/local/bin/cage");
+        cmd.env("XDG_RUNTIME_DIR", rundir)
+            .env("WLR_BACKENDS", "headless")
+            .env("WLR_RENDERER", "pixman")
+            .env("WLR_HEADLESS_OUTPUTS", "1")
+            .env("LIBSEAT_BACKEND", "noop")
+            .arg("-s");   // shell mode: stay alive with 0 clients, no wl-keepalive needed
+        cmd
+    };
+
+    let fifo_read_fd = fifo_read_raw.into_raw_fd();
+
+    // `Stdio::from_raw_fd` TAKES OWNERSHIP of fifo_read_fd: once handed to
+    // `.stdin(...)`, Rust's own Command/Stdio machinery closes the parent's copy when
+    // the Stdio is dropped (after spawn() returns, success OR failure) — the child gets
+    // its own dup'd descriptor via dup2() in the forked address space, independent of
+    // the parent's copy. An explicit `libc::close(fifo_read_fd)` afterward double-closes
+    // the same fd number, which is unsound (the number may already have been reused by
+    // an unrelated fd opened concurrently elsewhere — e.g. tokio's own reactor) and
+    // aborts the process under Rust's io-safety checks. Do not close it again here.
+    let mut cage = cage_cmd
+        .stdin(unsafe { Stdio::from_raw_fd(fifo_read_fd) })
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
         .map_err(|e| StreamError::SpawnFailed(format!("cage spawn: {}", e)))?;
+
     let cage_pid = cage.id();
-    eprintln!("[sm] {} cage pid={}", app_id, cage_pid);
+    eprintln!("[sm] {} cage pid={} (shell-mode)", app_id, cage_pid);
 
     // Wait for cage socket (10s) — tokio::time::sleep (kevent) works in QEMU
     let wl_sock = rundir.join("wayland-0");
@@ -407,16 +543,38 @@ async fn spawn_processes(cfg: &StreamConfig, rundir: &std::path::Path) -> Result
         waited += 1;
     }
     eprintln!("[sm] {} cage ready", app_id);
-    let _ = std::fs::set_permissions(&wl_sock, std::os::unix::fs::PermissionsExt::from_mode(0o777));
+    let _ = std::fs::set_permissions(&wl_sock, PermissionsExt::from_mode(0o777));
 
     // 2. Spawn wayland-tunnel
     eprintln!("[sm] {} spawning tunnel…", app_id);
-    let mut tunnel = Command::new("/usr/local/bin/wayland-tunnel")
-        .env("XDG_RUNTIME_DIR", rundir)
-        .env("WLSTREAM_COMPOSITOR_SOCK", rundir.join("wayland-0"))
-        .env("WLSTREAM_WAYLAND_SOCK", rundir.join("wayland-ghost-0"))
-        .env("WLSTREAM_STREAM_SOCK", rundir.join("wayland-stream.sock"))
-        .env("WLSTREAM_INPUT_SOCK", rundir.join("input.sock"))
+    let compositor_sock = rundir.join("wayland-0");
+    let ghost_wayland_sock = rundir.join("wayland-ghost-0");
+    let tunnel_stream_sock = rundir.join("wayland-stream.sock");
+    let tunnel_input_sock = rundir.join("input.sock");
+    let mut tunnel_cmd = if let Some(jail) = jail_name.as_deref() {
+        // jail-per-stream mode (#147): tunnel joins cage's jail via jexec (same jail
+        // name, no user switch — matches bare mode, which also runs as the caller's uid).
+        jexec_command(
+            jail, None,
+            &[
+                ("XDG_RUNTIME_DIR", rundir_str),
+                ("WLSTREAM_COMPOSITOR_SOCK", compositor_sock.to_str().unwrap_or("")),
+                ("WLSTREAM_WAYLAND_SOCK", ghost_wayland_sock.to_str().unwrap_or("")),
+                ("WLSTREAM_STREAM_SOCK", tunnel_stream_sock.to_str().unwrap_or("")),
+                ("WLSTREAM_INPUT_SOCK", tunnel_input_sock.to_str().unwrap_or("")),
+            ],
+            "/usr/local/bin/wayland-tunnel", &[],
+        )
+    } else {
+        let mut cmd = Command::new("/usr/local/bin/wayland-tunnel");
+        cmd.env("XDG_RUNTIME_DIR", rundir)
+            .env("WLSTREAM_COMPOSITOR_SOCK", &compositor_sock)
+            .env("WLSTREAM_WAYLAND_SOCK", &ghost_wayland_sock)
+            .env("WLSTREAM_STREAM_SOCK", &tunnel_stream_sock)
+            .env("WLSTREAM_INPUT_SOCK", &tunnel_input_sock);
+        cmd
+    };
+    let mut tunnel = tunnel_cmd
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
@@ -440,16 +598,124 @@ async fn spawn_processes(cfg: &StreamConfig, rundir: &std::path::Path) -> Result
 
     // 3. Spawn app
     eprintln!("[sm] {} spawning app ({})…", app_id, cfg.app);
-    let app = spawn_app(cfg, rundir).map_err(|e| {
+    let app = spawn_app(cfg, rundir, jail_name.as_deref()).map_err(|e| {
         let _ = cage.kill(); let _ = cage.wait();
         let _ = tunnel.kill(); let _ = tunnel.wait();
         e
     })?;
     let app_pid = app.id();
 
-    Ok(SpawnedProcesses { cage, tunnel, app, cage_pid, tunnel_pid, app_pid })
+    Ok(SpawnedProcesses { cage, _cage_stdin_fifo: fifo_write, tunnel, app, cage_pid, tunnel_pid, app_pid })
 }
 // END_SPAWN_PROCESSES
+
+// START_CREATE_STREAM_JAIL
+#[cfg(feature = "with-bridge")]
+// create_stream_jail:start
+//   purpose: Create an EMPTY, persistent per-stream FreeBSD jail named `stream-<app_id>`.
+//            No exec.start — cage/tunnel/app are launched afterward via jexec_command(),
+//            all three landing in the SAME jail. Teardown: stop_stream() calls
+//            `jail -r stream-<app_id>`, which kills every process inside by kernel
+//            enforcement (tracked by jid, independent of parent/child or double-fork
+//            reparenting) — no orphan possible by construction, and the existing
+//            chrome-double-fork `pkill` fallback in stop_stream becomes unnecessary once
+//            WLSTREAM_JAIL=1 is the only mode.
+//
+//   DESIGN (jail-per-stream, #147):
+//     path=/            — reuse host rootfs (zero extra storage; no OCI image needed —
+//                          this is plain pkg-installed native binaries, not a container
+//                          image; jailrun's ZFS/OCI-image model does not apply here)
+//     mount.devfs       — cage/tunnel/app need /dev (e.g. /dev/null, /dev/urandom)
+//     persist           — jail stays allocated with zero processes until jexec'd into
+//                          (mirrors drm-subtree-adjacent jailrun's own `_build_jail_conf`
+//                          rationale: "needed when we jexec rather than exec.start")
+//     allow.sysvipc=false — strict: no SysV IPC needed by cage/foot/chrome
+//     ip4=disable       — no network by default; chrome/firefox still work via host sockets
+//
+//   COUPLING with SPEC_coupling_v1.md §2 (Tier-1 HA): each stream jail is the "unit of
+//     placement/migration/fencing" described in SPEC_coupling_v1.md §1; the jail name
+//     `stream-<app_id>` is the logical address for a future Tier-1 HA reschedule.
+//
+//   PLATFORM: FreeBSD only (`jail(8)`). On non-FreeBSD this returns Err immediately;
+//     the caller (spawn_processes) only reaches this when WLSTREAM_JAIL=1.
+//   input:  app_id — used to derive the jail name `stream-<app_id>`
+//   output: Ok(()) once `jail -c` exits 0; Err(StreamError::SpawnFailed) with jail(8)'s
+//           own stderr on failure, or on unsupported platform
+//   sideEffects: creates a FreeBSD jail (kernel resource) named `stream-<app_id>`
+// create_stream_jail:end
+#[cfg(target_os = "freebsd")]
+fn create_stream_jail(app_id: &str) -> Result<(), StreamError> {
+    let jail_name = format!("stream-{}", app_id);
+    let out = Command::new("/usr/sbin/jail")
+        .args([
+            "-c",
+            &format!("name={}", jail_name),
+            "path=/",
+            "mount.devfs",
+            "persist",
+            "allow.sysvipc=false",
+            "ip4=disable",
+        ])
+        .output()
+        .map_err(|e| StreamError::SpawnFailed(format!("jail -c {}: {}", jail_name, e)))?;
+    if !out.status.success() {
+        return Err(StreamError::SpawnFailed(format!(
+            "jail -c {} failed: {}", jail_name, String::from_utf8_lossy(&out.stderr)
+        )));
+    }
+    Ok(())
+}
+
+#[cfg(not(target_os = "freebsd"))]
+fn create_stream_jail(_app_id: &str) -> Result<(), StreamError> {
+    Err(StreamError::SpawnFailed(
+        "WLSTREAM_JAIL=1 is only supported on FreeBSD; use bare-process mode on this platform".to_string()
+    ))
+}
+// END_CREATE_STREAM_JAIL
+
+// START_JEXEC_COMMAND
+#[cfg(feature = "with-bridge")]
+// jexec_command:start
+//   purpose: Build a Command that execs `bin` with `args` inside `jail_name` via jexec(8),
+//            with `env_vars` set explicitly through /usr/bin/env (the FreeBSD BASE-SYSTEM
+//            env(1) — NOT /usr/local/bin/env, which does not exist: env is never
+//            pkg-installed, only base) rather than relying on jexec's own environment-
+//            inheritance semantics (unverified for this jexec(8) version) — the same
+//            explicit-env intent the prior exec.start= line had (that line had the same
+//            /usr/local/bin/env path bug, confirmed by manual jexec: execvp: No such file
+//            or directory — the jail-per-stream path had never actually been run before
+//            #147's own verification). Pure argv chain (jexec → env → bin), NO shell —
+//            matches the project rule "shell: Command + Vec args, sh -c string запрещено
+//            (injection)"; url/path arguments pass through as single argv elements with no
+//            quoting surface.
+//   input:  jail_name — target jail (must already exist, e.g. via create_stream_jail);
+//           user — Some(name) switches identity via `jexec -u` (replaces bare-mode's
+//           `su -m user`), None runs as jexec's own caller (root, matching cage/tunnel's
+//           bare-mode behaviour of not switching user); env_vars — (key, value) pairs;
+//           bin — absolute path; args — passed through verbatim, no shell involved
+//   output: Command, ready for .stdin/.stdout/.stderr/.spawn()
+//   sideEffects: none (pure construction — spawning is the caller's responsibility)
+// jexec_command:end
+fn jexec_command(
+    jail_name: &str,
+    user: Option<&str>,
+    env_vars: &[(&str, &str)],
+    bin: &str,
+    args: &[&str],
+) -> Command {
+    let mut cmd = Command::new("/usr/sbin/jexec");
+    if let Some(u) = user {
+        cmd.args(["-u", u]);
+    }
+    cmd.arg(jail_name).arg("/usr/bin/env");
+    for (k, v) in env_vars {
+        cmd.arg(format!("{k}={v}"));
+    }
+    cmd.arg(bin).args(args);
+    cmd
+}
+// END_JEXEC_COMMAND
 
 // START_WAIT_SOCKET
 #[cfg(feature = "with-bridge")]
@@ -473,15 +739,43 @@ async fn wait_socket(path: &std::path::Path, max_half_seconds: u32) -> Result<()
 
 // START_SPAWN_APP
 #[cfg(feature = "with-bridge")]
-/// purpose: Spawn the Wayland application (firefox or foot).
-/// input: StreamConfig + rundir path
-/// output: std::process::Child or Err(StreamError::SpawnFailed)
-/// sideEffects: spawns child process as `cfg.user`
-fn spawn_app(cfg: &StreamConfig, rundir: &std::path::Path) -> Result<std::process::Child, StreamError> {
+// spawn_app:start
+//   purpose: Spawn the Wayland application (firefox/foot/chrome/cowork/cog).
+//   input:  StreamConfig + rundir path + jail_name (Some = jail-per-stream mode, #147:
+//           launch via jexec_command into the SAME jail as cage+tunnel so `jail -r`
+//           tears down the whole tree, incl. chrome's double-forked descendants, with no
+//           orphan possible; None = bare-process mode, unchanged from pre-#147 behaviour).
+//   output: std::process::Child or Err(StreamError::SpawnFailed)
+//   sideEffects: spawns child process as `cfg.user` (bare: via `su -m`; jail: via `jexec -u`)
+// spawn_app:end
+fn spawn_app(
+    cfg: &StreamConfig,
+    rundir: &std::path::Path,
+    jail_name: Option<&str>,
+) -> Result<std::process::Child, StreamError> {
     let display = "wayland-ghost-0";
+    let rundir_str = rundir.to_str().unwrap_or("/tmp/bsdos/streams/unknown");
+    let home = format!("/home/{}", cfg.user);
 
     match cfg.app.as_str() {
         "firefox" => {
+            if let Some(jail) = jail_name {
+                let child = jexec_command(
+                    jail, Some(&cfg.user),
+                    &[
+                        ("XDG_RUNTIME_DIR", rundir_str),
+                        ("WAYLAND_DISPLAY", display),
+                        ("MOZ_ENABLE_WAYLAND", "1"),
+                        ("HOME", &home),
+                    ],
+                    "/usr/local/bin/firefox", &["--new-instance", "--no-remote", &cfg.url],
+                )
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .spawn()
+                    .map_err(|e| StreamError::SpawnFailed(format!("app spawn: {}", e)))?;
+                return Ok(child);
+            }
             let child = Command::new("su")
                 .arg("-m").arg(&cfg.user)
                 .arg("-c")
@@ -496,6 +790,19 @@ fn spawn_app(cfg: &StreamConfig, rundir: &std::path::Path) -> Result<std::proces
             Ok(child)
         }
         "foot" => {
+            if let Some(jail) = jail_name {
+                let child = jexec_command(
+                    jail, None,
+                    &[("XDG_RUNTIME_DIR", rundir_str), ("WAYLAND_DISPLAY", display)],
+                    "/usr/local/bin/foot",
+                    &["sh", "-c", "while true; do date; uptime; sleep 1; done"],
+                )
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .spawn()
+                    .map_err(|e| StreamError::SpawnFailed(format!("app spawn: {}", e)))?;
+                return Ok(child);
+            }
             let child = Command::new("env")
                 .env("XDG_RUNTIME_DIR", rundir)
                 .env("WAYLAND_DISPLAY", display)
@@ -512,6 +819,30 @@ fn spawn_app(cfg: &StreamConfig, rundir: &std::path::Path) -> Result<std::proces
             // LIBGL_ALWAYS_SOFTWARE=true + MESA_GL_VERSION_OVERRIDE=3.3 gives Skia
             // the GPU rendering path → LCD subpixel antialiasing vs --disable-gpu's
             // grayscale AA. --force-device-scale-factor=2 matches Retina viewer (2x).
+            if let Some(jail) = jail_name {
+                let user_data_dir = format!("--user-data-dir={}/.bsdos-chrome", home);
+                let child = jexec_command(
+                    jail, Some(&cfg.user),
+                    &[
+                        ("XDG_RUNTIME_DIR", rundir_str),
+                        ("WAYLAND_DISPLAY", display),
+                        ("HOME", &home),
+                        ("LIBGL_ALWAYS_SOFTWARE", "true"),
+                        ("MESA_GL_VERSION_OVERRIDE", "3.3"),
+                    ],
+                    "/usr/local/bin/chrome",
+                    &[
+                        "--ozone-platform=wayland", "--no-sandbox", "--no-first-run",
+                        "--no-default-browser-check", &user_data_dir,
+                        "--force-device-scale-factor=2", "--new-window", &cfg.url,
+                    ],
+                )
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .spawn()
+                    .map_err(|e| StreamError::SpawnFailed(format!("app spawn: {}", e)))?;
+                return Ok(child);
+            }
             // exec collapses sh→env so su tracks the Chrome launcher PID directly.
             let child = Command::new("su")
                 .arg("-m").arg(&cfg.user)
@@ -541,6 +872,29 @@ fn spawn_app(cfg: &StreamConfig, rundir: &std::path::Path) -> Result<std::proces
                 .find(|p| std::path::Path::new(p).exists())
                 .copied()
                 .unwrap_or("/usr/local/bin/electron42");
+            if let Some(jail) = jail_name {
+                let child = jexec_command(
+                    jail, Some(&cfg.user),
+                    &[
+                        ("XDG_RUNTIME_DIR", rundir_str),
+                        ("WAYLAND_DISPLAY", display),
+                        ("HOME", &home),
+                        ("COWORK_VM_BACKEND", "host"),
+                        ("GIO_USE_VFS", "local"),
+                        ("GSETTINGS_BACKEND", "memory"),
+                        ("LIBGL_ALWAYS_SOFTWARE", "true"),
+                        ("MESA_GL_VERSION_OVERRIDE", "3.3"),
+                    ],
+                    electron,
+                    &["--no-sandbox", "--ozone-platform=wayland",
+                      "--force-device-scale-factor=2", &app_dir],
+                )
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .spawn()
+                    .map_err(|e| StreamError::SpawnFailed(format!("app spawn: {}", e)))?;
+                return Ok(child);
+            }
             let child = Command::new("su")
                 .arg("-m").arg(&cfg.user)
                 .arg("-c")
@@ -562,6 +916,18 @@ fn spawn_app(cfg: &StreamConfig, rundir: &std::path::Path) -> Result<std::proces
             } else {
                 cfg.url.clone()
             };
+            if let Some(jail) = jail_name {
+                let child = jexec_command(
+                    jail, Some(&cfg.user),
+                    &[("XDG_RUNTIME_DIR", rundir_str), ("WAYLAND_DISPLAY", display), ("HOME", &home)],
+                    "/usr/local/bin/cog", &["--platform=fdo", &url],
+                )
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .spawn()
+                    .map_err(|e| StreamError::SpawnFailed(format!("app spawn: {}", e)))?;
+                return Ok(child);
+            }
             let child = Command::new("su")
                 .arg("-m").arg(&cfg.user)
                 .arg("-c")
@@ -1108,5 +1474,91 @@ mod tests {
             make_config("appB", "chromium", "about:blank"),
         ]);
         assert!(double.len() > single.len(), "two entries must be larger than one");
+    }
+
+    // ── jail-per-stream (#147) — real jail(8), requires root + FreeBSD + cage/foot/
+    //    wayland-tunnel installed. Bypasses StreamManager/Zenoh entirely: calls
+    //    spawn_processes directly so this never touches any live registry, control
+    //    topic, or production stream. Run explicitly: `cargo test --features
+    //    with-bridge jail_per_stream -- --ignored --nocapture` as root on dev-vm.
+
+    #[cfg(target_os = "freebsd")]
+    fn jls_shows_jail(jail_name: &str) -> bool {
+        // `jls -N` prints one space-padded row per jail: "<name>  <ip>  <hostname>  <path>"
+        // (plus a header row) — the jail name is the FIRST whitespace-separated token, not
+        // the whole trimmed line (which also contains the padded IP/hostname/path columns).
+        std::process::Command::new("/usr/sbin/jls")
+            .args(["-N"])
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).lines()
+                .any(|l| l.split_whitespace().next() == Some(jail_name)))
+            .unwrap_or(false)
+    }
+
+    #[cfg(target_os = "freebsd")]
+    fn jail_process_count(jail_name: &str) -> usize {
+        // `jexec <jail> ps -axo pid=` lists PIDs visible INSIDE the jail — this is the
+        // kernel's own jail-membership view (ps(1) filters by jid when run inside a
+        // jail), not a name/pattern guess, so it also catches double-forked descendants.
+        std::process::Command::new("/usr/sbin/jexec")
+            .args([jail_name, "/bin/ps", "-axo", "pid="])
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).lines().filter(|l| !l.trim().is_empty()).count())
+            .unwrap_or(0)
+    }
+
+    // NOTE: this exercises create_stream_jail + jexec_command directly (the actual #147
+    // primitives spawn_processes calls in jail mode) with `/bin/sleep` stand-ins, rather
+    // than the full spawn_processes(cage+wayland-tunnel+foot) pipeline. Reason: the
+    // deployed /usr/local/bin/wayland-tunnel binary on dev-vm predates a WLSTREAM_* env-var
+    // rename (source main.zig commit e147a5a, 2026-06-23; binary last built 2026-06-18) —
+    // an independent, already-filed deploy-drift bug, NOT a #147/jail defect (confirmed:
+    // the identical env-var mismatch reproduces in bare/non-jailed mode too, via both a
+    // shell `env` prefix and Rust's own Command::env()). spawn_processes' own internal
+    // socket-wait loop for wayland-tunnel will time out until that binary is rebuilt+
+    // redeployed, regardless of jail mode. Once fixed, re-run a full end-to-end variant of
+    // this test using spawn_processes() itself for complete pipeline coverage.
+    #[cfg(target_os = "freebsd")]
+    #[tokio::test]
+    #[ignore] // root + real jail(8) required — not for plain `cargo test`
+    async fn jail_per_stream_three_processes_share_one_jail_and_teardown_leaves_none() {
+        let jail_name = "stream-test147jail".to_string();
+        // Clean up any stale jail from a previous crashed run before we start.
+        let _ = std::process::Command::new("/usr/sbin/jail").args(["-r", &jail_name]).status();
+
+        create_stream_jail("test147jail").expect("create_stream_jail must succeed");
+        assert!(jls_shows_jail(&jail_name), "jail {} must exist after create_stream_jail", jail_name);
+
+        // Three long-running processes via the SAME jexec_command primitive spawn_processes
+        // uses for cage/tunnel/app — proves multi-process, same-jail membership.
+        let mut p1 = jexec_command(&jail_name, None, &[], "/bin/sleep", &["30"])
+            .spawn().expect("spawn p1");
+        let mut p2 = jexec_command(&jail_name, None, &[], "/bin/sleep", &["30"])
+            .spawn().expect("spawn p2");
+        let mut p3 = jexec_command(&jail_name, Some("freebsd"), &[], "/bin/sleep", &["30"])
+            .spawn().expect("spawn p3 (with -u, matching firefox/chrome/cowork/cog's user-switch path)");
+        tokio::time::sleep(Duration::from_millis(300)).await;
+
+        // All three must be visible INSIDE the jail — the actual #147 property.
+        let count = jail_process_count(&jail_name);
+        assert!(count >= 3, "expected >=3 processes inside jail {}, found {}", jail_name, count);
+
+        // Teardown: jail -r must kill all three by kernel enforcement, no per-pid kill().
+        let rm = std::process::Command::new("/usr/sbin/jail").args(["-r", &jail_name]).status()
+            .expect("jail -r must run");
+        assert!(rm.success(), "jail -r {} must succeed", jail_name);
+        assert!(!jls_shows_jail(&jail_name), "jail {} must be gone after jail -r", jail_name);
+
+        // Reap: jail -r sends SIGTERM/SIGKILL to jailed processes; wait() to avoid zombies.
+        // Give the kernel a moment to deliver the signals before reaping.
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        let _ = p1.try_wait();
+        let _ = p2.try_wait();
+        let _ = p3.try_wait();
+        // If jail -r didn't actually kill them (would indicate a real #147 regression),
+        // force-kill here so the test process doesn't leak /bin/sleep children either way.
+        let _ = p1.kill(); let _ = p1.wait();
+        let _ = p2.kill(); let _ = p2.wait();
+        let _ = p3.kill(); let _ = p3.wait();
     }
 }

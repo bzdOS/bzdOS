@@ -317,6 +317,112 @@ pub async fn kill_application(jail_id: &str, states: &StateMap) -> Result<String
 }
 // kill_application:end
 
+// ── Сценарий 4: devfs ruleset 4 для вложенных run-jail'ов ────────────────────
+//
+// PROTOTYPE / DESIGN DRAFT — written 2026-07-23 as a design pass for the
+// nested-jailrun /dev/mem disclosure gap (see jailrun repo's ROADMAP.md and
+// the RuntimeError in jailrun's runtime/engine.py's _run_async, which fails
+// closed on this exact gap today). NOT deployed or live-tested against a real
+// nested jail — see the design doc alongside this crate for open questions
+// that need live verification before this ships.
+//
+// The problem this closes: applying devfs ruleset 4 (the restricted, safe
+// device set) to a fresh devfs mount requires PRIV_DEVFS_RULE, a host-only
+// privilege NOT delegable to a jail via any allow.* jail(8) parameter. A
+// process running INSIDE a jail (e.g. jailrun, itself running nested inside
+// some other application's production jail) can only ever select ruleset 0
+// (unrestricted) for a devfs it mounts for its OWN child run-jails — verified
+// live to expose a readable /dev/mem from inside that nested run-jail.
+//
+// bsdos_lifecycled runs on the bare host (outside every jail), so it DOES
+// have PRIV_DEVFS_RULE unconditionally. This scenario lets a nested jailrun
+// ask the host daemon to do the one privileged mount on its behalf, instead
+// of jailrun ever holding that privilege itself.
+//
+// Security design (the part that actually needed the "design pass" the
+// jailrun-side task called for, not a quick patch):
+//   1. The caller supplies ONLY a jail_id (name) — never a path. The daemon
+//      resolves the jail's real, kernel-reported filesystem root via
+//      jail_enum::path_by_name(), which calls jail_get(2) directly. A
+//      compromised/malicious caller therefore cannot smuggle an arbitrary
+//      host path into a privileged mount call — the only thing it controls
+//      is WHICH jail_id to ask about, and the kernel is the sole source of
+//      truth for what that jail's actual root path is.
+//   2. The mount target is ALWAYS "<kernel-resolved jail path>/dev" — a
+//      FIXED, hardcoded subpath, not a caller-supplied one. There is no
+//      caller-controlled path component at all beyond the jail_id string
+//      itself (which is validated the same way every other verb here
+//      validates it, via validate_jail_id, and then resolved by the kernel).
+//      This is deliberately narrower than a general "mount X at Y" verb: the
+//      only real use case is "give this one specific run-jail's /dev a
+//      restricted devfs", so the protocol should not accept more authority
+//      than that one operation needs.
+//   3. mount_devfs_ruleset4() itself never trusts anything about the target
+//      path's ownership/identity beyond what path_by_name() resolved — it
+//      does not, for example, accept a "kolkhoz_root" prefix or similar from
+//      the caller to compose the path itself.
+//
+// OPEN QUESTIONS not resolved by this draft (need live testing on a real
+// nested deployment before this ships, exactly why the jailrun-side task
+// asked for a design pass rather than treating this as a quick patch):
+//   - Idempotency: what does a second `mount -t devfs -o ruleset=4` at an
+//     ALREADY-mounted-devfs path actually do on FreeBSD (fail cleanly,
+//     stack a second mount, or silently no-op)? This draft treats "already
+//     mounted" as success (see the -f allowance below) but that is an
+//     UNVERIFIED assumption, not a confirmed kernel behavior.
+//   - Teardown ordering: this scenario has no corresponding "unmount" verb
+//     yet. Devfs unmount ordering relative to jail -r / the rest of
+//     destroy()'s teardown sequence (see jailrun's store.py) needs its own
+//     design, symmetric to this one.
+//   - Whether jailrun's jail.conf should stop calling `mount.devfs;` itself
+//     for the nested case (letting this pre-mounted /dev simply already be
+//     there when `jail -c` runs) or whether some other integration shape is
+//     needed — this affects engine.py's _build_jail_conf, not just this
+//     daemon, and is exactly the kind of cross-repo integration point that
+//     needs to be worked out WITH a real nested jail to observe, not guessed
+//     at from either side alone.
+//
+/// Ask the kernel (never the caller) for jail_id's real root path, then apply
+/// devfs ruleset 4 (the restricted device set) to that jail's /dev.
+// mount_devfs_ruleset4:start
+//   purpose: Apply devfs ruleset 4 to a nested run-jail's /dev on the caller's
+//            behalf, since PRIV_DEVFS_RULE is a host-only privilege the caller
+//            (running inside its OWN parent jail) cannot exercise itself.
+//   input:  jail_id — jail name; the ONLY thing the caller controls. There is
+//           no path parameter — the mount target is always
+//           "<kernel-resolved path>/dev", never caller-supplied.
+//   output: Result<String, String> (success message or error)
+//   sideEffects: calls jail_enum::path_by_name() (jail_get(2)); shells out to
+//                `mount -t devfs -o ruleset=4 devfs <resolved_path>/dev`
+//   rationale: see the design-draft block above this function for the full
+//              security reasoning; this is a PROTOTYPE, not live-verified.
+pub async fn mount_devfs_ruleset4(jail_id: &str) -> Result<String, String> {
+    let jail_id = validate_jail_id(jail_id)?;
+
+    // The kernel is the ONLY source of truth for this jail's real path —
+    // never trust a path string from the caller (see design note above).
+    let jail_path = jail_enum::path_by_name(jail_id)?;
+    if jail_path.is_empty() {
+        return Err(format!("jail {jail_id}: kernel reported an empty path"));
+    }
+
+    let dev_path = format!("{}/dev", jail_path.trim_end_matches('/'));
+    eprintln!("[lifecycle] mounting devfs ruleset=4 at {dev_path} for jail={jail_id}");
+
+    // UNVERIFIED (see design note above): whether a devfs already mounted at
+    // dev_path makes this fail, stack, or no-op. Treated as idempotent
+    // success for now — needs live confirmation before this ships.
+    match run("mount", &["-t", "devfs", "-o", "ruleset=4", "devfs", &dev_path]).await {
+        Ok(_) => Ok(format!("devfs ruleset=4 mounted at {dev_path} for jail={jail_id}")),
+        Err(e) if e.to_lowercase().contains("already mounted") => {
+            eprintln!("[lifecycle] {jail_id}: devfs already mounted at {dev_path} (treated as success)");
+            Ok(format!("devfs already mounted at {dev_path} for jail={jail_id}"))
+        }
+        Err(e) => Err(format!("mount devfs at {dev_path} for jail={jail_id}: {e}")),
+    }
+}
+// mount_devfs_ruleset4:end
+
 // ── Статус ───────────────────────────────────────────────────────────────────
 
 /// Real {jid, state, pids} snapshot of one jail.
@@ -426,6 +532,13 @@ async fn dispatch_cmd(line: &str, states: &StateMap, priorities: &PriorityMap) -
             (Some("KILL"),      Some(id)) => to_result(kill_application(id, states).await),
             (Some("STATUS"),    Some(id)) => to_result(status_application(id, states).await),
 
+            // DEVFS_MOUNT <jail_id> — prototype/design draft, see the
+            // "Сценарий 4" block above mount_devfs_ruleset4 for the full
+            // security rationale and open questions. No path argument by
+            // design: the mount target is always the kernel-resolved
+            // <jail_id>'s own path + "/dev", never caller-supplied.
+            (Some("DEVFS_MOUNT"), Some(id)) => to_result(mount_devfs_ruleset4(id).await),
+
             // LIST — enumerate every live jail (jid + name + pid count) from the kernel.
             (Some("LIST"), _) => to_result(list_jails_text()),
 
@@ -476,7 +589,9 @@ async fn dispatch_cmd(line: &str, states: &StateMap, priorities: &PriorityMap) -
                  LIST                           (enumerate live jails: jid name pids)\n\
                  SET_PRIORITY <jail_id> <0-255>  (0=fg, 255=bg)\n\
                  MEM_STATUS\n\
-                 MEM_GUARD on|off               (enable/disable memory monitor kills)".into()),
+                 MEM_GUARD on|off               (enable/disable memory monitor kills)\n\
+                 DEVFS_MOUNT <jail_id>          (PROTOTYPE, not live-verified -- \
+                 mount devfs ruleset=4 at <jail_id>'s own path + /dev)".into()),
             _ => (false, format!("unknown: {line}")),
     }
 }

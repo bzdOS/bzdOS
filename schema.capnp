@@ -72,3 +72,53 @@ struct WaylandPacket {
   opCode  @2 :UInt16;    # Wayland opcode (method index)
   payload @3 :Data;      # raw Wayland bytes (zero-copy, hand-rolled parsing)
 }
+
+# ── Coupling-store primitives (Ярус 2, SPEC_coupling_v1 §3) ───────────────────
+# Serialised over Zenoh bsdos/cf/<group>/… and the couplingd unix-socket
+# (control text CMD ARG\n, data Cap'n Proto length-prefixed binary).
+
+# Session/lease handle — корень всех coupling-объектов.
+# Смерть узла → TTL истёк → все его locks/ephemeral-keys/svc-reg автоматически сняты.
+struct Session {
+  id    @0 :UInt64;   # session identifier (random, node-unique)
+  node  @1 :UInt64;   # node identifier (Zenoh UUID or sysctl hw.hostid)
+  ttlMs @2 :UInt32;   # lease TTL in milliseconds (renewable via KEEPALIVE)
+  epoch @3 :UInt64;   # monotonic epoch counter (incremented on leader change)
+}
+
+# Lock acquisition mode — shared (read-lock) or exclusive (write-lock).
+enum Mode {
+  shared    @0;   # multiple holders allowed (read)
+  exclusive @1;   # single holder (write); fence++ on each acquire
+}
+
+# Distributed lock grant returned by LOCK ACQ.
+# fence — monotonic per-key fencing token; storage/VFS rejects stale tokens → no split-brain.
+struct LockGrant {
+  key   @0 :Text;   # lock key (arbitrary path-like string)
+  mode  @1 :Mode;   # granted mode
+  fence @2 :UInt64; # fencing token (monotonically increasing per key on each exclusive acquire)
+}
+
+# CAS/PUT entry for the linearisable KV store.
+# expectVer=0 means unconditional write; fence is forwarded to VFS for fenced writes.
+struct KvPut {
+  key       @0 :Text;   # store key
+  val       @1 :Data;   # value payload (Cap'n Proto or raw bytes)
+  expectVer @2 :UInt64; # expected current version for CAS (0 = unconditional)
+  fence     @3 :UInt64; # fencing token from associated LockGrant (0 = no fence)
+}
+
+# Queue entry for ordered persistent queues (QPUSH/QPOP).
+struct QEntry {
+  queue   @0 :Text;   # queue name
+  payload @1 :Data;   # message payload
+  seq     @2 :UInt64; # sequence number assigned by couplingd on enqueue (0 before assign)
+}
+
+# Service registration record (SvcRegistry, SPEC §3 SVC REG/RESOLVE).
+struct SvcReg {
+  name @0 :Text;    # service name (e.g. "pg-matrix", "synapse")
+  node @1 :UInt64;  # node hosting the service instance
+  sid  @2 :UInt64;  # session ID owning this registration (auto-expires with session)
+}
