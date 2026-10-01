@@ -1,0 +1,46 @@
+# Chimp / bpi-headless rc.conf — auto-start the bsdOS stack, no GUI.
+#
+# Target: Banana Pi (aarch64, Allwinner) real hardware, Chimp v0.2 Phase 1.
+# Append (or merge) this into /etc/rc.conf on the device image. Binaries are
+# shipped in the rootfs at /opt/bsdos/bin/ — there is NO 9p source share on
+# bare metal (that is QEMU/Squirrel only). See README-chimp-boot.md.
+#
+# Boot order (rcorder, by PROVIDE/REQUIRE in infra/rc.d/*):
+#   FILESYSTEMS → NETWORKING
+#     → bsdos_core        (REQUIRE: NETWORKING FILESYSTEMS)
+#     → bsdos_lifecycled  (REQUIRE: NETWORKING FILESYSTEMS mountcritremote)
+#     → bsdos_agent       (REQUIRE: FILESYSTEMS mountcritremote)
+
+hostname="bsdos-chimp"
+
+# --- bsdOS stack (headless: core + lifecycle + guest agent) -----------------
+bsdos_core_enable="YES"
+# Headless Chimp Phase 1: no compositor yet, so no autostream apps by default.
+# (Display = Chimp Phase 2 / fbdev+weston. Set bsdos_core_autostream then.)
+bsdos_core_autostream=""
+bsdos_core_listen_ip="0.0.0.0"
+bsdos_core_listen_port="7447"
+# No obfs on the device (obfs/443 is the Mac<->server dev-path feature only).
+bsdos_core_obfs="NO"
+
+bsdos_lifecycled_enable="YES"
+
+# Guest agent: virtio-console is a QEMU construct. On bare metal /dev/ttyV*
+# does not exist, so the rc.d script self-skips (logs and returns 0). Leaving
+# it enabled is harmless and keeps a single rc.conf across QEMU + hardware.
+bsdos_agent_enable="YES"
+
+# --- explicitly OFF on headless hardware ------------------------------------
+# No GUI stack in Chimp Phase 1 (display is Phase 2: fbdev + weston).
+bsdos_display_enable="NO"
+bsdos_cage_enable="NO"
+seatd_enable="NO"
+
+# No network login by default on the device.
+sshd_enable="NO"
+
+# Standard FreeBSD base bits a headless appliance still wants.
+zfs_enable="NO"
+syslogd_flags="-ss"
+sendmail_enable="NONE"
+clear_tmp_enable="YES"

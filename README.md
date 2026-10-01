@@ -16,7 +16,7 @@ bsdOS is a FreeBSD-based operating system built for privacy-first, ARM64 hardwar
 isolated FreeBSD jails — each app gets its own file system view, network policy, and entitlements.
 Wayland sessions are streamed over Zenoh peer mesh using a zero-copy wire format (wlstream), so a Mac
 or Linux client can view any jail's UI without SPICE or VNC. The primary targets are QEMU-based dev
-environments (Squirrel), Banana Pi BPI-M64 (Chimp), and PinePhone (Porcupine).
+environments (Squirrel), Banana Pi BPI-M64 (Chimp), and PinePhone (Woodpecker).
 
 ---
 
@@ -50,8 +50,8 @@ The control plane uses a simple text protocol (`CMD ARG\n` / `+OK\n`) over virti
 | bsdos-core | Rust | Stream manager + Zenoh node + lifecycle RPC | this repo |
 | bsdos-lifecycled | Rust | Jail FREEZE/THAW daemon | this repo |
 | bsdos-pkgd | Rust | .jpk package installer | this repo |
-| bsdos-run | Rust | IPA runner + entitlements to jail policy | this repo |
-| machotool | Rust | Mach-O / fat binary parser | this repo |
+| bsdos-run, machotool | Rust | IPA runner, Mach-O parser | [github.com/bzdOS/ipa-runtime](https://github.com/bzdOS/ipa-runtime) |
+| zenoh-freebsd | Rust | FreeBSD-patched Zenoh + obfs link | [github.com/bzdOS/zenoh-freebsd](https://github.com/bzdOS/zenoh-freebsd) |
 | WLTunnel | Zig | Wayland session streaming tunnel | [github.com/bzdOS/WLTunnel](https://github.com/bzdOS/WLTunnel) |
 | bsdos-hal | Zig | Hardware abstraction layer (aarch64) | [github.com/bzdOS/bsdos-hal](https://github.com/bzdOS/bsdos-hal) |
 | metal-viewer | Rust | macOS Metal stream viewer | [github.com/bzdOS/metal-viewer](https://github.com/bzdOS/metal-viewer) |
@@ -65,10 +65,10 @@ The control plane uses a simple text protocol (`CMD ARG\n` / `+OK\n`) over virti
 |---|---|---|
 | Squirrel | QEMU amd64 + aarch64 | v0.1.3 done |
 | Chimp | Banana Pi BPI-M64 (A64) | bring-up — done under [bzdk](https://github.com/bzdOS/bzdk), with GPU via [lima-freebsd](https://github.com/bzdOS/lima-freebsd) |
-| Porcupine | PinePhone (A64) | planned |
+| Woodpecker | PinePhone (A64), oBzdOS on OpenBSD | planned |
 
 Both amd64 and aarch64 QEMU images are built from the same source tree. The aarch64 image is
-structurally identical to the Chimp and Porcupine targets (same A64 SoC family, same drivers).
+structurally identical to the Chimp target (same A64 SoC family, same drivers).
 
 ---
 
@@ -86,13 +86,18 @@ cargo build --release -p bsdos-core
 ./infra/scripts/mk-cross-cc.sh aarch64-unknown-freebsd15.1
 ```
 
-### Deploy to a running VM
+### Repository layout
 
-```sh
-# Set your VM IPs, then:
-DEV_IP=<dev-vm-ip> MYVM_IP=<myvm-ip> \
-  infra/scripts/deploy-bsdos-myvm.sh --all
-```
+| Path | What |
+|---|---|
+| `bsdos-core/`, `lifecycled/`, `bsdos-pkgd/`, `jpk-manager/`, `jpk-recipes/` | base services and the jailed-app model |
+| `kernel/` | kernel configs (`BSDOS-*`) |
+| `infra/scripts/` | image build (`bsdos-build.sh`, `bpi-image.sh`), cross toolchain, kernel build, smoke test |
+| `infra/machines.conf`, `infra/pkgsets/` | per-machine arch / kernel / package set |
+| `infra/rc.d/`, `infra/etc*/`, `infra/config/`, `infra/conf/` | what the image ships in `/etc` and `/usr/local/etc` |
+| `infra/u-boot/` | Banana Pi M64 boot blobs |
+
+Deployment to particular hosts is not part of this repository.
 
 ### Smoke test
 

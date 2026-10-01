@@ -1,0 +1,26 @@
+# bsdos-core.toml — Unified configuration for bsdos-core
+# 
+# Location: /etc/bsdos/bsdos-core.toml
+# Precedence: env var > TOML > default
+# Old env vars (BSDOS_STREAM_SOCK, BSDOS_ZENOH_KEY) produce deprecation warnings.
+
+[zenoh]
+transport = "obfs"            # "tcp" | "obfs" | "tls"
+listen_ip = "192.0.2.10"   # this host's public address
+listen_port = "443"
+obfs_psk = "9JZhI0DhxYJRLx8zJsYTmk/in3ha3Z5LL4RWPzwuk9M="
+multicast = false              # set true for LAN scouting (breaks QEMU user-net)
+open_timeout_secs = 10
+
+[stream]
+# Comma-separated app_id:app pairs launched at boot.
+# Example: ["appTerminal:foot", "appBrowser:chrome"]
+autostart = ["appBrowser:chrome"]
+
+[output]
+# Headless output resolution + scale factor.
+# For Retina viewer: width=2560, height=1440, scale=2.0
+# For 1080p viewer: width=1920, height=1080, scale=1.0
+width = 2560
+height = 1440
+scale = 2.0

@@ -377,7 +377,7 @@ Per user 2026-06-15 ("арм и амд равнозначный пока"):
 3. **Both ship in same release** — `bsdos-squirrel-v0.1.3-amd64.img.gz` AND
    `bsdos-squirrel-v0.1.3-aarch64.img.gz`. No "primary" or "secondary".
 4. **amd64 not a throwaway** — many dev hosts are amd64 (including the
-   existing bsdOS dev VM 203.0.113.11). Forcing aarch64 would slow
+   existing bsdOS dev VM). Forcing aarch64 would slow
    the inner loop unnecessarily.
 
 **Dev workflow:**

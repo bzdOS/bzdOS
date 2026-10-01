@@ -1,0 +1,11 @@
+# bsdOS KERNCONF для arm64 (PinePhone / Banana Pi BPI-F3)
+include GENERIC
+
+device          virtio_console
+
+# HAL: разрешить доступ к /dev/gpio, /dev/iic, /dev/spi
+# device gpio, iic и т.д. уже в GENERIC arm64
+
+# options RACCT RCTL для jail memory accounting
+options         RACCT
+options         RCTL

@@ -5,10 +5,8 @@ members = [
     "bsdos-core/tests/zenoh-peer",
     "bsdos-core/tests/integration",
     "bsdos-pkgd",
-    "bsdos-run",
     "lifecycled",
     "jpk-manager",
-    "machotool",
 ]
 
 # Shared dependencies pinned here for workspace consistency

@@ -1,0 +1,47 @@
+# bsdOS KERNCONF for Squirrel v0.1.x — aarch64 QEMU (virt, cortex-a72)
+# Based on GENERIC. Custom options added; no driver stripping (safer).
+# This is the architectural target (same arch as Chimp/Porcupine production HW).
+
+include GENERIC
+ident           BSDOS-SQUIRREL-aarch64
+
+# ── VirtIO (QEMU virt devices — explicit even though in GENERIC) ────────────
+device          virtio
+device          virtio_pci
+device          virtio_blk
+device          virtio_net
+device          virtio_console
+device          virtio_gpu
+
+# ── Filesystems ─────────────────────────────────────────────────────────────
+options         ZFS
+options         DEVFS
+
+# ── EFI runtime services ─────────────────────────────────────────────────────
+options         EFI
+
+# ── ARM64 timer (QEMU virt generic_timer) ───────────────────────────────────
+device          generic_timer
+
+# ── Jail / resource accounting ─────────────────────────────────────────────
+options         RACCT
+options         RCTL
+
+# ── ARM SIMD: NEON + VFP (in GENERIC arm64; explicit for .jpk hw-features) ──
+options         VFP
+
+# ── Filesystems ────────────────────────────────────────────────────────────
+options         MSDOSFS
+options         CD9660
+options         NULLFS
+options         TMPFS
+
+# ── Networking (PF) ────────────────────────────────────────────────────────
+device          pf
+device          pflog
+
+# ── Crypto ──────────────────────────────────────────────────────────────────
+device          cryptodev
+
+# ── Console ────────────────────────────────────────────────────────────────
+device          uart                   # PL011 UART (QEMU virt serial)

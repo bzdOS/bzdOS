@@ -112,13 +112,13 @@ stage1_base() {
 
     if [ ! -f "$WORK/rootfs/COPYRIGHT" ]; then
         log "  Extracting base.txz → $WORK/rootfs/"
-        tar -xf "$BASE_TXZ" -C "$WORK/rootfs/"
+        sudo tar -xf "$BASE_TXZ" -C "$WORK/rootfs/"
     else
         log "  Already extracted: base.txz"
     fi
     if [ ! -f "$WORK/rootfs/boot/kernel/kernel" ]; then
         log "  Extracting kernel.txz → $WORK/rootfs/"
-        tar -xf "$KERNEL_TXZ" -C "$WORK/rootfs/"
+        sudo tar -xf "$KERNEL_TXZ" -C "$WORK/rootfs/"
     else
         log "  Already extracted: kernel.txz"
     fi

@@ -1,0 +1,20 @@
+# Chimp / bpi-headless /etc/fstab — Banana Pi (aarch64) real hardware.
+#
+# FreeBSD on Allwinner SBCs boots U-Boot -> EFI stub off the SD card / eMMC.
+# The SD/eMMC block device enumerates as mmcsd0 (mmcsd0p2 = UFS root on a GPT
+# image written with the Chimp build). Adjust the device if you target eMMC
+# (often da0) or a different partition layout.
+#
+# Device      Mountpoint  FStype  Options       Dump  Pass#
+/dev/mmcsd0p2  /          ufs     rw,noatime    1     1
+/dev/mmcsd0p1  /boot/efi  msdosfs rw,noauto     0     0
+
+# Optional swap on the card (uncomment + size to taste; eMMC/SD wear applies).
+#/dev/mmcsd0p3  none       swap    sw            0     0
+
+# --- 9p / p9fs: QEMU-ONLY, NOT used on bare metal ---------------------------
+# The /mnt/bsdos shared source mount exists only under QEMU (Squirrel dev loop,
+# virtio-9p transport). On the Banana Pi there is no host share — every binary
+# is baked into the rootfs at /opt/bsdos/bin/. Do NOT add a p9fs line here.
+# (Reference of the QEMU-only mount, kept commented for clarity:)
+#bsdos          /mnt/bsdos  p9fs    trans=virtio,rw  0  0

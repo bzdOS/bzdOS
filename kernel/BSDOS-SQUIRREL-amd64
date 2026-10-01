@@ -1,0 +1,44 @@
+# bsdOS KERNCONF for Squirrel v0.1.x — amd64 QEMU (q35, KVM/TCG)
+# Based on GENERIC. Custom options added; no driver stripping (safer).
+# Size optimization done at filesystem level (strip modules, remove .debug).
+#
+# Build:  cd /usr/src && make -j$(nproc) buildkernel KERNCONF=BSDOS-SQUIRREL-amd64
+
+include GENERIC
+ident           BSDOS-SQUIRREL-amd64
+
+# ── VirtIO (QEMU q35 devices — explicit even though in GENERIC) ────────────
+device          virtio
+device          virtio_pci
+device          virtio_blk
+device          virtio_net
+device          virtio_console
+device          virtio_gpu
+
+# ── Filesystems ─────────────────────────────────────────────────────────────
+options         ZFS
+options         DEVFS
+
+# ── EFI runtime services ─────────────────────────────────────────────────────
+options         EFI
+
+# ── Jail / resource accounting / Capsicum ──────────────────────────────────
+options         RACCT
+options         RCTL
+
+# ── Filesystems ────────────────────────────────────────────────────────────
+options         MSDOSFS
+options         CD9660
+options         NULLFS
+options         TMPFS
+
+# ── Networking (PF firewall for ad-block + jail policy) ────────────────────
+device          pf
+device          pflog
+
+# ── Crypto ──────────────────────────────────────────────────────────────────
+device          cryptodev
+device          aesni
+
+# ── Performance ─────────────────────────────────────────────────────────────
+options         HZ=1000

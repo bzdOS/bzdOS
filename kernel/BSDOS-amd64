@@ -1,0 +1,13 @@
+# bsdOS KERNCONF для amd64 (dev VM, KVM)
+# Базируется на GENERIC + дополнительные устройства для bsdOS dev-среды.
+include GENERIC
+
+# virtio-console для агента (host↔guest без SSH)
+device          virtio_console
+
+# 9P filesystem для shared host dirs (FreeBSD 15+)
+# device       virtio_p9fs   # раскомментировать на 15.x
+
+# Опции jail/devfs для bsdOS sandbox
+options         RACCT
+options         RCTL
