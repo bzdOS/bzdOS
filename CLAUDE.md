@@ -80,9 +80,9 @@
 - **Дев — на сервере (host+VM).** Вся разработка по роадмапу идёт там, локально. Mac — только запуск obfs-клиента (временно, для obfs-дебага). НЕ плодить Mac-only обёртки.
 - **Истина кода — репо org `github.com/bzdOS` (с 2026-10-01).** Монорепо bsdOS растворён: каждый компонент в своём репо, карта — `docs/EXTRACTION-MAP.md`. **Этот репо (bzdOS)** = дистрибутив + dev loop (dev-VM, guest-agent, деплой дистрибутива) + процесс команды (этот файл, `AGENTS.md`, `SESSION_RULES.md`). Агенты работают из клона bzdOS. Деплой mesh/matrix-hs — `bzdOS/mrgd: deploy/bsdos/`, мост hubd→Matrix — `bzdOS/hubd: contrib/bsdos/`. Неперспективный код — локальный attic без remote.
 - **Значения хостов — не в git.** IP, ключ, каталог данных buildhost: `/etc/bsdos/hosts.env` (`BSDOS_HOST_IP`, `BSDOS_DEV_IP`, `BSDOS_MYVM_IP`, `BSDOS_GW_IP`, `BSDOS_OBFS_LISTEN_IP`, `BSDOS_SSH_KEY`, `BSDOS_ROOT`, `BSDOS_CERTS`). Там же сертификаты Zenoh, env-файлы юнитов, cloud-init. Скрипты читают этот файл сами и падают, если значения нет; `$BSDOS_*` в тексте ниже — оттуда. Новое значение для хоста — строка в hosts.env, не литерал в коде.
-- **⚠ Переходное состояние (2026-10-01):** шара `/mnt/bsdos` на dev-vm **отключена** (`bsdos_virtiofs_enable=NO`, ничего не смонтировано; `/mnt/bsdos` там — локальный каталог). На dev-vm и workstation лежат tar-копии исходников без git (`/opt/bsdos-src`, `/srv/board-from-buildhost`) — заменить клонами репо (hubd `a hub task`). Пока это не сделано, сборка из `/mnt/bsdos` и deploy pipeline ниже **не работают**. План переезда — `PLAN-host-split.md`.
+- **⚠ Переходное состояние (проверено 2026-10-02):** исходники на dev-vm — git-checkout bzdOS в `/opt/bsdos-src` (tar-копии там больше нет). На dev-vm и myvm лежит `/etc/bsdos/hosts.env`. Шара `/mnt/bsdos` на dev-vm **отключена** (`bsdos_virtiofs_enable=NO`, ничего не смонтировано; `/mnt/bsdos` там — локальный каталог); myvm её по-прежнему монтирует (rc.d гостевого агента берёт оттуда `guest-agent/`). Не решено, как бинарники с dev-vm попадают в стейджинг для myvm, поэтому deploy pipeline ниже пока **не работает**. План переезда — `docs/ops/PLAN-host-split.md`.
 - **СБОРКА — только на dev VM (dev-vm).** Rust (`cargo build`), ports (`make install`), любые компиляторы — только на dev-vm. myvm (myvm) = runtime only, никаких компиляторов/портов.
-- **Deploy pipeline (до 2026-10-01; сейчас сломан, см. выше):** build on dev-vm → stage to `/mnt/bsdos/artefacts/myvm-bin/` → install on myvm via `install -m 755`. Скрипт: `infra/scripts/deploy-bsdos-myvm.sh --all`. Новый транспорт стейджинга — решение D3 в `PLAN-host-split.md`.
+- **Deploy pipeline (до 2026-10-01; сейчас не работает, см. выше):** build on dev-vm → stage to `/mnt/bsdos/artefacts/myvm-bin/` → install on myvm via `install -m 755`. Скрипт: `infra/scripts/deploy-bsdos-myvm.sh --all`. Новый транспорт стейджинга — решение D3 в `PLAN-host-split.md`.
 - **electron42 build:** `make install` на dev-vm, затем `pkg create electron42` → stage .pkg → `pkg add` на myvm.
 - **ssh — транспорт СНАРУЖИ, не внутри рецептов.** Запуск: `ssh <box> 'cd <repo> && <make-цель>'`. Никаких `make → script → nested-ssh` обёрток.
 - **Makefile один, GNU.** Таргеты = локальные команды. `make` на host/Mac, `gmake` на FreeBSD (нужен `pkg install gmake` — bmake не понимает GNU-синтаксис `$(shell)`/`$(or)`).
@@ -217,7 +217,8 @@ handle this via `su -m root`. Never run them bare.
 
 | What | Path |
 |---|---|
-| Sources | tar-копия без git `/opt/bsdos-src/` (часть компонентов); целевое — клоны репо org bzdOS (`a hub task`) |
+| Sources | git-checkout bzdOS: `/opt/bsdos-src/` |
+| Per-host values | `/etc/bsdos/hosts.env` (+ Zenoh certs в `/etc/bsdos/`) |
 | bsdos-core binary | `/mnt/bsdos/artefacts/myvm-bin/bsdos-core` |
 | wayland-tunnel binary | `/mnt/bsdos/artefacts/myvm-bin/wayland-tunnel` |
 | Logs | `/mnt/bsdos/artefacts/logs/` |
